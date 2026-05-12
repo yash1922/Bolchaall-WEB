@@ -1,0 +1,192 @@
+[
+  {
+    "title": "/s/ vs /sh/ — perception drill",
+    "description": "Listen to two words and pick which one starts with /s/.",
+    "targetPhonemes": ["/s/", "/ʃ/"],
+    "type": "perception",
+    "difficulty": "easy",
+    "setName": "Set 1 · Warm-up",
+    "setOrder": 1,
+    "items": [
+      { "prompt": "Which one says /s/?", "targetWord": "sip", "altWord": "ship" },
+      { "prompt": "Which one says /s/?", "targetWord": "save", "altWord": "shave" },
+      { "prompt": "Which one says /s/?", "targetWord": "sue", "altWord": "shoe" },
+      { "prompt": "Which one says /s/?", "targetWord": "sock", "altWord": "shock" },
+      { "prompt": "Which one says /s/?", "targetWord": "see", "altWord": "she" }
+    ]
+  },
+  {
+    "title": "Voiced vs voiceless — /b/ vs /p/",
+    "description": "Identify voiced /b/ vs voiceless /p/ in initial position.",
+    "targetPhonemes": ["/b/", "/p/"],
+    "type": "perception",
+    "difficulty": "easy",
+    "setName": "Set 1 · Warm-up",
+    "setOrder": 2,
+    "items": [
+      { "prompt": "Which one is voiced (/b/)?", "targetWord": "bat", "altWord": "pat" },
+      { "prompt": "Which one is voiced (/b/)?", "targetWord": "bin", "altWord": "pin" },
+      { "prompt": "Which one is voiced (/b/)?", "targetWord": "back", "altWord": "pack" },
+      { "prompt": "Which one is voiced (/b/)?", "targetWord": "buy", "altWord": "pie" }
+    ]
+  },
+  {
+    "title": "/l/ production — light L",
+    "description": "Tongue tip on the alveolar ridge; let air flow over the sides.",
+    "targetPhonemes": ["/l/"],
+    "type": "production",
+    "difficulty": "easy",
+    "setName": "Set 1 · Warm-up",
+    "setOrder": 3,
+    "items": [
+      { "prompt": "Say the word", "targetWord": "lake" },
+      { "prompt": "Say the word", "targetWord": "love" },
+      { "prompt": "Say the word", "targetWord": "leaf" },
+      { "prompt": "Say the word", "targetWord": "light" }
+    ]
+  },
+
+  {
+    "title": "/sh/ production — round those lips",
+    "description": "Round lips slightly and push air gently through.",
+    "targetPhonemes": ["/ʃ/"],
+    "type": "production",
+    "difficulty": "easy",
+    "setName": "Set 2 · Tongue & Teeth",
+    "setOrder": 1,
+    "items": [
+      { "prompt": "Say the word", "targetWord": "she" },
+      { "prompt": "Say the word", "targetWord": "shoe" },
+      { "prompt": "Say the word", "targetWord": "fish" },
+      { "prompt": "Say the word", "targetWord": "wash" }
+    ]
+  },
+  {
+    "title": "/s/ blends — production",
+    "description": "Practice /s/ blends at the start of words.",
+    "targetPhonemes": ["/s/"],
+    "type": "production",
+    "difficulty": "easy",
+    "setName": "Set 2 · Tongue & Teeth",
+    "setOrder": 2,
+    "items": [
+      { "prompt": "Say the word", "targetWord": "snake" },
+      { "prompt": "Say the word", "targetWord": "stop" },
+      { "prompt": "Say the word", "targetWord": "smile" },
+      { "prompt": "Say the word", "targetWord": "spider" },
+      { "prompt": "Say the word", "targetWord": "small" }
+    ]
+  },
+  {
+    "title": "/th/ tongue placement — production",
+    "description": "Practice the dental /θ/ sound with your tongue lightly between teeth.",
+    "targetPhonemes": ["/θ/"],
+    "type": "production",
+    "difficulty": "medium",
+    "setName": "Set 2 · Tongue & Teeth",
+    "setOrder": 3,
+    "items": [
+      { "prompt": "Say the word", "targetWord": "think" },
+      { "prompt": "Say the word", "targetWord": "thank" },
+      { "prompt": "Say the word", "targetWord": "thumb" },
+      { "prompt": "Say the word", "targetWord": "math" },
+      { "prompt": "Say the word", "targetWord": "bath" }
+    ]
+  },
+
+  {
+    "title": "/r/ vs /l/ — perception drill",
+    "description": "Distinguish /r/ from /l/ at word beginnings.",
+    "targetPhonemes": ["/r/", "/l/"],
+    "type": "perception",
+    "difficulty": "medium",
+    "setName": "Set 3 · The Tricky R",
+    "setOrder": 1,
+    "items": [
+      { "prompt": "Which one says /r/?", "targetWord": "rake", "altWord": "lake" },
+      { "prompt": "Which one says /r/?", "targetWord": "right", "altWord": "light" },
+      { "prompt": "Which one says /r/?", "targetWord": "race", "altWord": "lace" },
+      { "prompt": "Which one says /r/?", "targetWord": "road", "altWord": "load" }
+    ]
+  },
+  {
+    "title": "/r/ in different positions — production",
+    "description": "Initial, medial, and final /r/ — common stroke recovery target.",
+    "targetPhonemes": ["/r/"],
+    "type": "production",
+    "difficulty": "hard",
+    "setName": "Set 3 · The Tricky R",
+    "setOrder": 2,
+    "items": [
+      { "prompt": "Initial /r/", "targetWord": "red" },
+      { "prompt": "Initial /r/", "targetWord": "right" },
+      { "prompt": "Medial /r/", "targetWord": "carry" },
+      { "prompt": "Medial /r/", "targetWord": "berry" },
+      { "prompt": "Final /r/", "targetWord": "car" },
+      { "prompt": "Final /r/", "targetWord": "star" }
+    ]
+  },
+
+  {
+    "title": "Long vs short vowels — perception",
+    "description": "Listen for long /iː/ vs short /ɪ/.",
+    "targetPhonemes": ["/iː/", "/ɪ/"],
+    "type": "perception",
+    "difficulty": "medium",
+    "setName": "Set 4 · Vowels & Clusters",
+    "setOrder": 1,
+    "items": [
+      { "prompt": "Which one is long /iː/?", "targetWord": "sheep", "altWord": "ship" },
+      { "prompt": "Which one is long /iː/?", "targetWord": "feet", "altWord": "fit" },
+      { "prompt": "Which one is long /iː/?", "targetWord": "leave", "altWord": "live" },
+      { "prompt": "Which one is long /iː/?", "targetWord": "seat", "altWord": "sit" }
+    ]
+  },
+  {
+    "title": "/k/ vs /g/ — production",
+    "description": "Practice voiceless /k/ and voiced /g/ side by side.",
+    "targetPhonemes": ["/k/", "/g/"],
+    "type": "production",
+    "difficulty": "medium",
+    "setName": "Set 4 · Vowels & Clusters",
+    "setOrder": 2,
+    "items": [
+      { "prompt": "Say the word", "targetWord": "cat" },
+      { "prompt": "Say the word", "targetWord": "go" },
+      { "prompt": "Say the word", "targetWord": "key" },
+      { "prompt": "Say the word", "targetWord": "girl" }
+    ]
+  },
+  {
+    "title": "Consonant clusters — production",
+    "description": "Tackle tricky consonant blends.",
+    "targetPhonemes": ["/s/", "/p/", "/t/"],
+    "type": "production",
+    "difficulty": "hard",
+    "setName": "Set 4 · Vowels & Clusters",
+    "setOrder": 3,
+    "items": [
+      { "prompt": "Say the word", "targetWord": "splash" },
+      { "prompt": "Say the word", "targetWord": "spring" },
+      { "prompt": "Say the word", "targetWord": "stretch" },
+      { "prompt": "Say the word", "targetWord": "scream" }
+    ]
+  },
+
+  {
+    "title": "Daily warm-up — common phrases",
+    "description": "Open practice. Speak each phrase at your own pace.",
+    "targetPhonemes": [],
+    "type": "production",
+    "difficulty": "easy",
+    "setName": "Bonus · Free Practice",
+    "setOrder": 1,
+    "items": [
+      { "prompt": "Say the phrase", "targetWord": "hello" },
+      { "prompt": "Say the phrase", "targetWord": "thank you" },
+      { "prompt": "Say the phrase", "targetWord": "good morning" },
+      { "prompt": "Say the phrase", "targetWord": "how are you" },
+      { "prompt": "Say the phrase", "targetWord": "see you soon" }
+    ]
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "name": "bolchall-v2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bolchall V2 — hackathon-grade home-based speech therapy SaaS",
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,magenta \"pnpm --filter web dev\" \"pnpm --filter api dev\"",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "build": "pnpm --filter api build && pnpm --filter web build",
+    "build:web": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "lint": "pnpm --filter web lint && pnpm --filter api lint",
+    "typecheck": "pnpm --filter web typecheck && pnpm --filter api typecheck",
+    "seed": "pnpm --filter api seed",
+    "create-admin": "pnpm --filter api create-admin"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

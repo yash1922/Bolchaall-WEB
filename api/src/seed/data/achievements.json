@@ -1,0 +1,65 @@
+[
+  {
+    "code": "first_step",
+    "name": "First Step",
+    "description": "Complete your very first exercise.",
+    "icon": "rocket",
+    "criteria": { "type": "first_score", "threshold": 1 }
+  },
+  {
+    "code": "on_fire_3",
+    "name": "Heating Up",
+    "description": "Practice 3 days in a row.",
+    "icon": "flame",
+    "criteria": { "type": "streak_days", "threshold": 3 }
+  },
+  {
+    "code": "on_fire_7",
+    "name": "On Fire",
+    "description": "Practice 7 days in a row.",
+    "icon": "flame",
+    "criteria": { "type": "streak_days", "threshold": 7 }
+  },
+  {
+    "code": "on_fire_14",
+    "name": "Unstoppable",
+    "description": "Practice 14 days in a row.",
+    "icon": "trophy",
+    "criteria": { "type": "streak_days", "threshold": 14 }
+  },
+  {
+    "code": "ace_5",
+    "name": "Sharpshooter",
+    "description": "Score 90+ on 5 attempts.",
+    "icon": "target",
+    "criteria": { "type": "score_threshold_count", "threshold": 5 }
+  },
+  {
+    "code": "ace_15",
+    "name": "Pronunciation Pro",
+    "description": "Score 90+ on 15 attempts.",
+    "icon": "medal",
+    "criteria": { "type": "score_threshold_count", "threshold": 15 }
+  },
+  {
+    "code": "master_s",
+    "name": "Master of /s/",
+    "description": "Score 80+ on 3 /s/ exercises.",
+    "icon": "star",
+    "criteria": { "type": "phoneme_mastery", "threshold": 3, "phoneme": "/s/" }
+  },
+  {
+    "code": "master_r",
+    "name": "Master of /r/",
+    "description": "Score 80+ on 3 /r/ exercises.",
+    "icon": "star",
+    "criteria": { "type": "phoneme_mastery", "threshold": 3, "phoneme": "/r/" }
+  },
+  {
+    "code": "master_th",
+    "name": "Master of /th/",
+    "description": "Score 80+ on 3 /θ/ exercises.",
+    "icon": "star",
+    "criteria": { "type": "phoneme_mastery", "threshold": 3, "phoneme": "/θ/" }
+  }
+]
