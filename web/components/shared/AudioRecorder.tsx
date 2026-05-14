@@ -12,11 +12,13 @@ interface Props {
   targetMfcc?: number[];
   maxDurationMs?: number;
   className?: string;
+  /** Change this prop value (e.g. exercise item index) to force the recorder to reset between items. */
+  resetKey?: string | number;
 }
 
 const DEFAULT_MAX_MS = 4000;
 
-export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MAX_MS, className }: Props) {
+export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MAX_MS, className, resetKey }: Props) {
   const [state, setState] = useState<"idle" | "recording" | "scoring" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -41,6 +43,21 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When the parent advances to a new item, drop the previous recording and reset to idle.
+  useEffect(() => {
+    cleanup();
+    chunksRef.current = [];
+    mfccFramesRef.current = [];
+    setElapsedMs(0);
+    setError(null);
+    setState("idle");
+    setLastBlobUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 
   function cleanup() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);

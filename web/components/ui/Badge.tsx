@@ -11,14 +11,22 @@ type Variant =
   | "trial";
 
 const variants: Record<Variant, string> = {
-  default: "bg-ink-100 text-ink-700 border-ink-200",
-  primary: "bg-brand-50 text-brand-700 border-brand-200",
-  success: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  warning: "bg-amber-50 text-amber-700 border-amber-200",
-  danger: "bg-rose-50 text-rose-700 border-rose-200",
-  info: "bg-sky-50 text-sky-700 border-sky-200",
-  muted: "bg-ink-100 text-ink-600 border-ink-200",
-  trial: "bg-coral-50 text-coral-600 border-coral-200",
+  default:
+    "bg-ink-100 text-ink-700 border-ink-200 dark:bg-ink-800 dark:text-ink-300 dark:border-ink-700",
+  primary:
+    "bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-950 dark:text-brand-300 dark:border-brand-800",
+  success:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
+  warning:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  danger:
+    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800",
+  info:
+    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800",
+  muted:
+    "bg-ink-100 text-ink-600 border-ink-200 dark:bg-ink-800 dark:text-ink-400 dark:border-ink-700",
+  trial:
+    "bg-coral-50 text-coral-600 border-coral-200 dark:bg-coral-950 dark:text-coral-300 dark:border-coral-800",
 };
 
 export function Badge({

@@ -94,11 +94,6 @@ export default function LoginPage() {
           </Link>
         </div>
       </Card>
-
-      <p className="text-xs text-ink-400 text-center mt-4">
-        Demo accounts use password{" "}
-        <code className="font-mono text-ink-600">Bolchall@2026</code>
-      </p>
     </motion.div>
   );
 }

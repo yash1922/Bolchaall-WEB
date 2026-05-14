@@ -52,9 +52,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <span
               className={cn(
                 "h-8 w-8 rounded-lg flex items-center justify-center",
-                t.variant === "success" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-                t.variant === "error" && "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
-                t.variant === "info" && "bg-brand-50 text-brand-700 ring-1 ring-brand-200"
+                t.variant === "success" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800",
+                t.variant === "error" && "bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:ring-rose-800",
+                t.variant === "info" && "bg-brand-50 text-brand-700 ring-1 ring-brand-200 dark:bg-brand-950 dark:text-brand-300 dark:ring-brand-800"
               )}
             >
               {t.variant === "success" && <CheckCircle2 className="w-4 h-4" />}
@@ -64,12 +64,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <div>
               <RToast.Title className="font-medium text-sm">{t.title}</RToast.Title>
               {t.description && (
-                <RToast.Description className="text-xs text-ink-600 mt-0.5">
+                <RToast.Description className="text-xs text-ink-600 dark:text-ink-400 mt-0.5">
                   {t.description}
                 </RToast.Description>
               )}
             </div>
-            <RToast.Close className="p-1 rounded hover:bg-white">
+            <RToast.Close className="p-1 rounded hover:bg-white dark:hover:bg-ink-800">
               <X className="w-3.5 h-3.5" />
             </RToast.Close>
           </RToast.Root>

@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
@@ -47,8 +48,9 @@ const config: Config = {
           500: "#f59e0b",
           600: "#d97706",
         },
-        // Calm ink palette for text on light bg
+        // Calm ink palette for text on light bg + dark bg surfaces
         ink: {
+          950: "#0d061d",
           900: "#1a0d2e",
           800: "#33214f",
           700: "#4d3a6c",

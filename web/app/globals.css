@@ -6,8 +6,14 @@
   :root {
     color-scheme: light;
   }
+  .dark {
+    color-scheme: dark;
+  }
   html, body {
     @apply bg-surface-50 text-ink-900 antialiased min-h-screen;
+  }
+  html.dark, html.dark body {
+    @apply bg-ink-950 text-ink-100;
   }
   body {
     background-image:
@@ -16,11 +22,23 @@
       radial-gradient(at 50% 100%, rgba(193,154,255,0.10) 0px, transparent 55%);
     background-attachment: fixed;
   }
+  html.dark body {
+    background-image:
+      radial-gradient(at 15% 5%, rgba(124,58,237,0.18) 0px, transparent 55%),
+      radial-gradient(at 85% 0%, rgba(248,90,23,0.08) 0px, transparent 55%),
+      radial-gradient(at 50% 100%, rgba(193,154,255,0.10) 0px, transparent 55%);
+  }
   ::selection {
     @apply bg-brand-200 text-ink-900;
   }
+  .dark ::selection {
+    @apply bg-brand-700 text-ink-100;
+  }
   h1, h2, h3, h4 {
     @apply text-ink-900;
+  }
+  .dark h1, .dark h2, .dark h3, .dark h4 {
+    @apply text-ink-100;
   }
 }
 
@@ -28,10 +46,19 @@
   .glass {
     @apply bg-white/70 backdrop-blur-xl border border-ink-200 shadow-soft;
   }
+  .dark .glass {
+    @apply bg-ink-900/70 border-ink-700;
+  }
   .glass-strong {
     @apply bg-white/90 backdrop-blur-2xl border border-ink-200 shadow-lift;
   }
+  .dark .glass-strong {
+    @apply bg-ink-900/90 border-ink-700;
+  }
   .card-base {
     @apply bg-white border border-ink-200 shadow-soft;
+  }
+  .dark .card-base {
+    @apply bg-ink-900 border-ink-700;
   }
 }
