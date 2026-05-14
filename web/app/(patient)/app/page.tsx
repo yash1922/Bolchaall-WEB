@@ -98,6 +98,8 @@ export default function PatientDashboard() {
   const trialDays = trialDaysLeft(patient.trialEndsAt);
   const expired = isTrialExpired(patient.trialEndsAt) && patient.subscriptionStatus === "trial";
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
+  // First-time user: nothing recorded yet. Render a giant CTA so they can't miss the entry point.
+  const isFirstTime = patient.xp === 0 && recentScores.length === 0 && !patient.lastPracticedAt;
 
   return (
     <div className="flex flex-col gap-6">
@@ -136,6 +138,51 @@ export default function PatientDashboard() {
           {refreshing ? "Refreshing…" : "Refresh"}
         </Button>
       </motion.div>
+
+      {isFirstTime && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35 }}
+        >
+          <Card className="bg-gradient-to-br from-brand-100 via-brand-50 to-coral-50 dark:from-brand-900 dark:via-brand-950 dark:to-coral-950 border-brand-300 dark:border-brand-700">
+            <div className="flex items-start gap-4 flex-wrap">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center shadow-soft shrink-0">
+                <Mic className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-[260px]">
+                <h2 className="font-display text-2xl text-ink-900 dark:text-ink-100 mb-1">
+                  Ready for your first recording?
+                </h2>
+                <p className="text-sm text-ink-700 dark:text-ink-300 mb-4">
+                  You haven&apos;t practised yet — your dashboard is empty until you record one
+                  attempt. Pick a phoneme, hit <strong>Start recording</strong>, say the sample
+                  word, then <strong>Stop</strong>. You&apos;ll earn XP, coins, and your first
+                  badge instantly.
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link href="/app/phonemes">
+                    <Button variant="primary">
+                      <BookOpen className="w-4 h-4" />
+                      Pick a phoneme
+                    </Button>
+                  </Link>
+                  <Link href="/app/exercise/free">
+                    <Button variant="ghost">
+                      <Mic className="w-4 h-4" />
+                      Or browse exercises
+                    </Button>
+                  </Link>
+                </div>
+                <p className="text-xs text-ink-500 dark:text-ink-400 mt-3">
+                  Tip: allow microphone access when your browser asks. If nothing happens after
+                  recording, open DevTools (F12) → Console and screenshot any red errors.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
