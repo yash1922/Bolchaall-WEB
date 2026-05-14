@@ -30,8 +30,8 @@ export function AchievementBadge({
       className={cn(
         "rounded-xl border p-3 flex flex-col items-center text-center gap-2 transition",
         unlocked
-          ? "bg-gradient-to-br from-brand-50 to-brand-100 border-brand-300 text-ink-900 shadow-soft"
-          : "bg-ink-100 border-ink-200 text-ink-400",
+          ? "bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-900 dark:to-brand-800 border-brand-300 dark:border-brand-600 text-ink-900 dark:text-ink-50 shadow-soft"
+          : "bg-ink-100 dark:bg-ink-800 border-ink-200 dark:border-ink-700 text-ink-500 dark:text-ink-300",
         glow && unlocked && "ring-2 ring-gold-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]"
       )}
       title={description}
@@ -39,7 +39,7 @@ export function AchievementBadge({
       <Icon
         className={cn(
           "w-6 h-6",
-          unlocked ? "text-gold-500" : "text-ink-300"
+          unlocked ? "text-gold-500" : "text-ink-400 dark:text-ink-500"
         )}
       />
       <span className="text-xs font-medium leading-tight">{name}</span>

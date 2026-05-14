@@ -82,10 +82,10 @@ export default function PatientDashboard() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <h1 className="font-display text-3xl mb-1">
+        <h1 className="font-display text-3xl mb-1 text-ink-900 dark:text-ink-100">
           Welcome back{patient.conditions.length > 0 ? "" : "!"}
         </h1>
-        <p className="text-sm text-ink-600">
+        <p className="text-sm text-ink-600 dark:text-ink-400">
           {patient.subscriptionStatus === "trial" && !expired && `Trial — ${trialDays} day${trialDays === 1 ? "" : "s"} left.`}
           {expired && (
             <span className="text-coral-700">
