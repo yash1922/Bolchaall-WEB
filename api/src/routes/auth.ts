@@ -19,17 +19,28 @@ import type { Role } from "shared";
 const REFRESH_COOKIE = "bolchall_refresh";
 
 function setRefreshCookie(res: import("express").Response, raw: string, expiresAt: Date) {
+  // sameSite: "none" + secure: true is REQUIRED in production because the web app
+  // (vercel.app) and the api (onrender.com) live on different registrable domains.
+  // With "lax" the browser refuses to send the cookie on cross-site fetches, so
+  // every page refresh logged the user out. In dev (http://localhost) we keep "lax"
+  // since "none" without secure is rejected by browsers.
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie(REFRESH_COOKIE, raw, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
     expires: expiresAt,
     path: "/api/auth",
   });
 }
 
 function clearRefreshCookie(res: import("express").Response) {
-  res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie(REFRESH_COOKIE, {
+    path: "/api/auth",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+  });
 }
 
 export const authRouter = Router();
