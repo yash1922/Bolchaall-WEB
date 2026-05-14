@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Flame, BookOpen, Mic, Trophy, ListTodo } from "lucide-react";
+import { Flame, BookOpen, Mic, Trophy, ListTodo, RefreshCw } from "lucide-react";
 import { Card, CardHeader, StatCard } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CardSkeleton, StatCardSkeleton } from "@/components/ui/Skeleton";
@@ -20,27 +20,51 @@ type Dashboard = Awaited<ReturnType<typeof api.patientDashboard>>;
 export default function PatientDashboard() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const setSession = useAuthStore((s) => s.setSession);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const fetchDashboard = useCallback(
+    async (silent: boolean) => {
+      if (!silent) setRefreshing(true);
       try {
         const d = await api.patientDashboard();
-        if (!cancelled) setData(d);
-        // refresh patient data in store too
+        setData(d);
         try {
           const me = await api.me();
-          if (!cancelled) setSession(me);
-        } catch {}
+          setSession(me);
+        } catch {
+          /* best-effort */
+        }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load dashboard");
+        setError(e instanceof Error ? e.message : "Failed to load dashboard");
+      } finally {
+        if (!silent) setRefreshing(false);
       }
-    })();
-    return () => {
-      cancelled = true;
+    },
+    [setSession]
+  );
+
+  // Initial load
+  useEffect(() => {
+    fetchDashboard(true);
+  }, [fetchDashboard]);
+
+  // Refetch whenever the tab becomes visible again (user navigated back from a recording).
+  // Without this, scores recorded on /app/phonemes/[id] don't appear here until a hard reload.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchDashboard(true);
+      }
     };
-  }, [setSession]);
+    const onFocus = () => fetchDashboard(true);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchDashboard]);
 
   if (error) {
     return (
@@ -81,22 +105,36 @@ export default function PatientDashboard() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
+        className="flex items-start justify-between gap-3"
       >
-        <h1 className="font-display text-3xl mb-1 text-ink-900 dark:text-ink-100">
-          Welcome back{patient.conditions.length > 0 ? "" : "!"}
-        </h1>
-        <p className="text-sm text-ink-600 dark:text-ink-400">
-          {patient.subscriptionStatus === "trial" && !expired && `Trial — ${trialDays} day${trialDays === 1 ? "" : "s"} left.`}
-          {expired && (
-            <span className="text-coral-700">
-              Your trial has ended.{" "}
-              <Link href="/app/billing/success" className="underline">
-                Upgrade to keep practicing.
-              </Link>
-            </span>
-          )}
-          {patient.subscriptionStatus === "active" && "Premium — practice as much as you want."}
-        </p>
+        <div>
+          <h1 className="font-display text-3xl mb-1 text-ink-900 dark:text-ink-100">
+            Welcome back{patient.conditions.length > 0 ? "" : "!"}
+          </h1>
+          <p className="text-sm text-ink-600 dark:text-ink-400">
+            {patient.subscriptionStatus === "trial" && !expired && `Trial — ${trialDays} day${trialDays === 1 ? "" : "s"} left.`}
+            {expired && (
+              <span className="text-coral-700">
+                Your trial has ended.{" "}
+                <Link href="/app/billing/success" className="underline">
+                  Upgrade to keep practicing.
+                </Link>
+              </span>
+            )}
+            {patient.subscriptionStatus === "active" && "Premium — practice as much as you want."}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => fetchDashboard(false)}
+          disabled={refreshing}
+          aria-label="Refresh dashboard"
+          title="Refresh — click after recording if your scores don't appear"
+        >
+          <RefreshCw className={refreshing ? "w-4 h-4 animate-spin" : "w-4 h-4"} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </Button>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
