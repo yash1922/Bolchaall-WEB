@@ -169,14 +169,50 @@ export const api = {
       "/api/patient/auto-match",
       { method: "POST" }
     ),
+  patientRateTherapist: (body: { stars: number; comment?: string }) =>
+    request<{
+      stars: number;
+      comment: string;
+      averageRating: number;
+      ratingCount: number;
+    }>("/api/patient/therapist/rate", { method: "POST", body }),
+  patientGetTherapistRating: () =>
+    request<{
+      stars: number | null;
+      comment: string;
+      averageRating: number | null;
+      ratingCount: number;
+    }>("/api/patient/therapist/rating"),
+
+  // ---- uploads ----
+  uploadBase64: (body: { filename: string; mime: string; base64: string }) =>
+    request<{ url: string; id: string; sizeBytes: number }>("/api/upload/base64", {
+      method: "POST",
+      body,
+    }),
 
   // ---- doctor ----
+  doctorProfile: () =>
+    request<import("shared").DoctorProfileDTO>("/api/doctor/profile"),
   doctorApply: (body: {
+    fullName: string;
+    phone: string;
+    qualification: string;
+    specialization: string;
+    linkedinUrl: string;
+    clinicName: string;
     license: string;
     experienceYears: number;
     certifications: string[];
     bio: string;
-  }) => request<{ status: string }>("/api/doctor/apply", { method: "POST", body }),
+    govIdUrl: string;
+    licenseDocUrl: string;
+    certificationsUrls: string[];
+  }) =>
+    request<{ status: string; submittedAt: string }>("/api/doctor/apply", {
+      method: "POST",
+      body,
+    }),
   doctorDashboard: () =>
     request<{
       doctor: { id: string; status: string; rating: number; experienceYears: number };
@@ -230,10 +266,26 @@ export const api = {
         title: string;
         description: string;
         targetPhonemes: string[];
-        type: string;
-        difficulty: string;
+        type: "perception" | "production";
+        difficulty: "easy" | "medium" | "hard";
+        items: Array<{ prompt: string; targetWord: string; altWord?: string | null }>;
+        setName: string;
+        setOrder: number;
+        tier: "beginner" | "intermediate" | "advanced";
+        isGlobal: boolean;
+        isMine: boolean;
       }>
     >("/api/doctor/exercises"),
+  doctorCreateExercise: (body: {
+    title: string;
+    description: string;
+    targetPhonemes: string[];
+    type: "perception" | "production";
+    difficulty: "easy" | "medium" | "hard";
+    items: Array<{ prompt: string; targetWord: string; altWord?: string | null }>;
+  }) => request<{ id: string }>("/api/doctor/exercises", { method: "POST", body }),
+  doctorDeleteExercise: (id: string) =>
+    request<{ deleted: true }>(`/api/doctor/exercises/${id}`, { method: "DELETE" }),
   doctorAvailablePatients: () =>
     request<
       Array<{
@@ -246,6 +298,60 @@ export const api = {
     >("/api/doctor/available-patients"),
   doctorClaim: (patientUserId: string) =>
     request<{ claimed: true }>(`/api/doctor/claim/${patientUserId}`, { method: "POST" }),
+  doctorListAssignments: (filter: "all" | "pending_review" | "reviewed" | "open" = "all") =>
+    request<
+      Array<{
+        id: string;
+        patientId: string;
+        patientName: string;
+        patientEmail: string;
+        exerciseId: string;
+        exerciseTitle: string;
+        exerciseType: string;
+        exerciseDifficulty: string;
+        exerciseTargetPhonemes: string[];
+        dueAt: string | null;
+        completedAt: string | null;
+        reviewedAt: string | null;
+        therapistFeedback: string;
+        therapistManualScore: number | null;
+        note: string;
+        createdAt: string;
+      }>
+    >(`/api/doctor/assignments?filter=${filter}`),
+  doctorAssignmentDetail: (id: string) =>
+    request<{
+      id: string;
+      patient: { id: string; name: string; email: string };
+      exercise: {
+        id: string;
+        title: string;
+        type: string;
+        difficulty: string;
+        targetPhonemes: string[];
+        items: Array<{ prompt: string; targetWord: string; altWord?: string | null }>;
+      };
+      dueAt: string | null;
+      completedAt: string | null;
+      reviewedAt: string | null;
+      therapistFeedback: string;
+      therapistManualScore: number | null;
+      note: string;
+      scores: Array<{
+        id: string;
+        score: number;
+        selfRating: number | null;
+        audioUrl: string | null;
+        createdAt: string;
+      }>;
+    }>(`/api/doctor/assignments/${id}`),
+  doctorSubmitFeedback: (id: string, body: { feedback: string; manualScore: number | null }) =>
+    request<{
+      id: string;
+      therapistFeedback: string;
+      therapistManualScore: number | null;
+      reviewedAt: string | null;
+    }>(`/api/doctor/assignments/${id}/feedback`, { method: "POST", body }),
 
   // ---- admin ----
   adminAnalytics: () =>
@@ -257,18 +363,27 @@ export const api = {
         userId: string;
         name: string;
         email: string;
+        fullName: string;
+        phone: string;
+        qualification: string;
+        specialization: string;
+        linkedinUrl: string;
+        clinicName: string;
         license: string;
         experienceYears: number;
         certifications: string[];
         bio: string;
+        govIdUrl: string | null;
+        licenseDocUrl: string | null;
+        certificationsUrls: string[];
         credentialsUrl: string | null;
         appliedAt: string;
       }>
     >("/api/admin/applications"),
-  adminDecide: (id: string, decision: "approve" | "reject") =>
+  adminDecide: (id: string, decision: "approve" | "reject", remarks = "") =>
     request<{ status: string }>(`/api/admin/applications/${id}/decision`, {
       method: "POST",
-      body: { decision },
+      body: { decision, remarks },
     }),
   adminUsers: () =>
     request<
@@ -286,6 +401,57 @@ export const api = {
       method: "POST",
       body: { suspend },
     }),
+  adminAssignments: () =>
+    request<{
+      patients: Array<{
+        userId: string;
+        name: string;
+        email: string;
+        subscriptionStatus: string;
+        assignedDoctorId: string | null;
+        conditions: string[];
+      }>;
+      doctors: Array<{
+        userId: string;
+        name: string;
+        email: string;
+        specialization: string;
+        rating: number;
+        rosterCount: number;
+      }>;
+    }>("/api/admin/assignments"),
+  adminAssignPatient: (patientUserId: string, doctorUserId: string | null) =>
+    request<{ patientUserId: string; assignedDoctorId: string | null }>(
+      "/api/admin/assignments",
+      { method: "POST", body: { patientUserId, doctorUserId } }
+    ),
+  adminListChats: () =>
+    request<
+      Array<{
+        id: string;
+        patientId: string;
+        doctorId: string;
+        patientName: string;
+        doctorName: string;
+        lastMessageAt: string | null;
+        unreadByPatient: number;
+        unreadByDoctor: number;
+      }>
+    >("/api/admin/chats"),
+  adminChatMessages: (chatId: string) =>
+    request<
+      Array<{
+        id: string;
+        senderId: string;
+        senderName: string;
+        senderRole: string;
+        body: string;
+        createdAt: string;
+        readAt: string | null;
+      }>
+    >(`/api/admin/chats/${chatId}/messages`),
+  adminDeleteMessage: (messageId: string) =>
+    request<{ deleted: true }>(`/api/admin/chats/messages/${messageId}`, { method: "DELETE" }),
 
   // ---- chat ----
   listChats: () => request<import("shared").ChatDTO[]>("/api/chat/"),

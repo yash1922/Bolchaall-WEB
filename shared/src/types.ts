@@ -4,7 +4,7 @@ export type Role = "patient" | "doctor" | "admin";
 
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled" | "none";
 
-export type DoctorStatus = "pending" | "approved" | "rejected";
+export type DoctorStatus = "unsubmitted" | "pending" | "approved" | "rejected";
 
 export type ExerciseType = "perception" | "production";
 
@@ -46,6 +46,20 @@ export interface DoctorProfileDTO {
   bio: string;
   status: DoctorStatus;
   rating: number;
+  // Extended onboarding fields (may be empty until application is submitted)
+  fullName?: string;
+  phone?: string;
+  qualification?: string;
+  specialization?: string;
+  linkedinUrl?: string;
+  clinicName?: string;
+  govIdUrl?: string | null;
+  licenseDocUrl?: string | null;
+  certificationsUrls?: string[];
+  adminRemarks?: string;
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
 }
 
 export interface PhonemeWordDTO {
@@ -69,6 +83,8 @@ export interface ExerciseItemDTO {
   altWord?: string;
 }
 
+export type ExerciseTier = "beginner" | "intermediate" | "advanced";
+
 export interface ExerciseDTO {
   id: string;
   title: string;
@@ -81,16 +97,25 @@ export interface ExerciseDTO {
   isGlobal: boolean;
   setName: string;
   setOrder: number;
+  tier: ExerciseTier;
 }
 
 export interface AssignmentDTO {
   id: string;
   patientId: string;
   doctorId: string;
+  doctorName?: string;
   exerciseId: string;
   exerciseTitle: string;
+  exerciseType?: string;
+  exerciseDifficulty?: string;
+  exerciseTargetPhonemes?: string[];
   dueAt: string | null;
   completedAt: string | null;
+  reviewedAt?: string | null;
+  therapistFeedback?: string;
+  therapistManualScore?: number | null;
+  note?: string;
   createdAt: string;
 }
 

@@ -16,26 +16,59 @@ import phonemes from "./data/phonemes.json";
 import exercises from "./data/exercises.json";
 import achievements from "./data/achievements.json";
 
-const DEMO_PASSWORD = "Bolchall@2026";
-
 async function run() {
   await connectDB();
-  console.log("[seed] wiping existing data...");
-  await Promise.all([
-    User.deleteMany({}),
-    Patient.deleteMany({}),
-    DoctorProfile.deleteMany({}),
-    PhonemeWord.deleteMany({}),
-    Exercise.deleteMany({}),
-    Achievement.deleteMany({}),
-    Assignment.deleteMany({}),
-    Score.deleteMany({}),
-    Chat.deleteMany({}),
-    Message.deleteMany({}),
-    RefreshToken.deleteMany({}),
-  ]);
 
-  console.log("[seed] inserting phonemes, exercises, achievements...");
+  const includeDemoUsers = String(process.env.BOLCHALL_INCLUDE_DEMO_USERS).toLowerCase() === "true";
+  const demoPassword = process.env.DEMO_ACCOUNT_PASSWORD ?? "Bolchall@2026";
+
+  // Resolve demo emails up-front so we can scope the wipe to only those accounts.
+  const adminEmail = (process.env.DEMO_ADMIN_EMAIL ?? "admin@bolchall.demo").toLowerCase();
+  const drApproved1Email = (process.env.DEMO_DOCTOR_APPROVED_1_EMAIL ?? "dr.priya@bolchall.demo").toLowerCase();
+  const drApproved2Email = (process.env.DEMO_DOCTOR_APPROVED_2_EMAIL ?? "dr.raj@bolchall.demo").toLowerCase();
+  const drPendingEmail = (process.env.DEMO_DOCTOR_PENDING_EMAIL ?? "dr.pending@bolchall.demo").toLowerCase();
+  const patientPaidEmail = (process.env.DEMO_PATIENT_PAID_EMAIL ?? "patient.sara@bolchall.demo").toLowerCase();
+  const patientTrialEmail = (process.env.DEMO_PATIENT_TRIAL_EMAIL ?? "patient.alex@bolchall.demo").toLowerCase();
+  const demoEmails = [
+    adminEmail,
+    drApproved1Email,
+    drApproved2Email,
+    drPendingEmail,
+    patientPaidEmail,
+    patientTrialEmail,
+  ];
+
+  console.log("[seed] wiping existing content data + demo-only user accounts…");
+  // Always wipe content tables (phonemes, exercises, achievements) — these are static seed data.
+  const wipeOps: Promise<unknown>[] = [
+    PhonemeWord.deleteMany({}).exec(),
+    Exercise.deleteMany({ isGlobal: true }).exec(), // keep therapist-created exercises
+    Achievement.deleteMany({}).exec(),
+  ];
+
+  if (includeDemoUsers) {
+    // Targeted wipe: only delete the demo email accounts + their cascading records.
+    // ANY user account you signed up yourself is preserved across reseeds.
+    const demoUsers = await User.find({ email: { $in: demoEmails } }).select("_id").lean();
+    const demoUserIds = demoUsers.map((u) => u._id);
+    wipeOps.push(
+      User.deleteMany({ email: { $in: demoEmails } }).exec(),
+      Patient.deleteMany({ userId: { $in: demoUserIds } }).exec(),
+      DoctorProfile.deleteMany({ userId: { $in: demoUserIds } }).exec(),
+      Assignment.deleteMany({
+        $or: [{ patientId: { $in: demoUserIds } }, { doctorId: { $in: demoUserIds } }],
+      }).exec(),
+      Score.deleteMany({ patientId: { $in: demoUserIds } }).exec(),
+      Chat.deleteMany({
+        $or: [{ patientId: { $in: demoUserIds } }, { doctorId: { $in: demoUserIds } }],
+      }).exec(),
+      Message.deleteMany({ senderId: { $in: demoUserIds } }).exec(),
+      RefreshToken.deleteMany({ userId: { $in: demoUserIds } }).exec()
+    );
+  }
+  await Promise.all(wipeOps);
+
+  console.log("[seed] inserting phonemes, exercises, achievements…");
   await PhonemeWord.insertMany(phonemes);
   await Exercise.insertMany(
     exercises.map((e) => ({
@@ -43,75 +76,100 @@ async function run() {
       isGlobal: true,
       setName: e.setName ?? "Warm-up",
       setOrder: e.setOrder ?? 0,
+      tier: (e as { tier?: string }).tier ?? "beginner",
     }))
   );
   await Achievement.insertMany(achievements);
 
-  console.log("[seed] creating demo accounts...");
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
+  if (!includeDemoUsers) {
+    console.log("[seed] skipping demo user creation (BOLCHALL_INCLUDE_DEMO_USERS != true).");
+    console.log("[seed] To bootstrap an admin: pnpm create-admin <email> <name> <password>");
+    await disconnectDB();
+    process.exit(0);
+  }
+
+  console.log("[seed] creating demo accounts (BOLCHALL_INCLUDE_DEMO_USERS=true)…");
+  console.log("[seed] (any non-demo accounts you signed up are preserved.)");
+  const passwordHash = await hashPassword(demoPassword);
 
   const admin = await User.create({
-    email: "admin@bolchall.demo",
+    email: adminEmail,
     name: "Asha Admin",
     role: "admin",
     passwordHash,
   });
 
   const drPriya = await User.create({
-    email: "dr.priya@bolchall.demo",
+    email: drApproved1Email,
     name: "Dr. Priya Sharma",
     role: "doctor",
     passwordHash,
   });
   await DoctorProfile.create({
     userId: drPriya._id,
+    fullName: "Dr. Priya Sharma",
+    phone: "+91 90000 11111",
+    qualification: "MASLP",
+    specialization: "Adult stroke recovery + pediatric articulation",
     license: "SLP-IN-2018-4421",
     certifications: ["MASLP", "ASHA-CCC-SLP"],
     experienceYears: 8,
     bio: "Speech-language pathologist focused on adult stroke recovery and pediatric articulation.",
     status: "approved",
+    submittedAt: new Date(),
+    approvedAt: new Date(),
     rating: 4.9,
   });
 
   const drRaj = await User.create({
-    email: "dr.raj@bolchall.demo",
+    email: drApproved2Email,
     name: "Dr. Raj Mehta",
     role: "doctor",
     passwordHash,
   });
   await DoctorProfile.create({
     userId: drRaj._id,
+    fullName: "Dr. Raj Mehta",
+    phone: "+91 90000 22222",
+    qualification: "MASLP",
+    specialization: "Bilingual fluency + accent modification",
     license: "SLP-IN-2020-7891",
     certifications: ["MASLP"],
     experienceYears: 5,
     bio: "Bilingual SLP (English/Hindi) — fluency disorders and accent modification.",
     status: "approved",
+    submittedAt: new Date(),
+    approvedAt: new Date(),
     rating: 4.7,
   });
 
   const drPending = await User.create({
-    email: "dr.pending@bolchall.demo",
+    email: drPendingEmail,
     name: "Dr. Sam Nair",
     role: "doctor",
     passwordHash,
   });
   await DoctorProfile.create({
     userId: drPending._id,
+    fullName: "Dr. Sam Nair",
+    phone: "+91 90000 33333",
+    qualification: "BASLP",
+    specialization: "Articulation disorders",
     license: "SLP-IN-2024-0001",
     certifications: ["BASLP"],
     experienceYears: 1,
     bio: "Recently graduated, awaiting platform approval.",
     status: "pending",
+    submittedAt: new Date(),
   });
 
-  // Patient Alex — trial, assigned to Priya
+  // Patient Alex — trial, assigned to Priya (auto-trial-therapist demo)
   const userAlex = await User.create({
-    email: "patient.alex@bolchall.demo",
+    email: patientTrialEmail,
     name: "Alex Rivera",
     role: "patient",
     passwordHash,
   });
-  const trialEndsAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
   await Patient.create({
     userId: userAlex._id,
     language: "en",
@@ -122,19 +180,18 @@ async function run() {
     lastPracticedAt: new Date(),
     unlockedBadges: ["first_step", "on_fire_3"],
     subscriptionStatus: "trial",
-    trialEndsAt,
+    trialEndsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
     assignedDoctorId: drPriya._id,
     onboardingComplete: true,
   });
 
-  // Patient Sara — paid, assigned to Raj
+  // Patient Sara — paid plan, assigned to Raj (use this account to test premium features)
   const userSara = await User.create({
-    email: "patient.sara@bolchall.demo",
+    email: patientPaidEmail,
     name: "Sara Khan",
     role: "patient",
     passwordHash,
   });
-  const paidEndsAt = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000);
   await Patient.create({
     userId: userSara._id,
     language: "hi",
@@ -145,12 +202,11 @@ async function run() {
     lastPracticedAt: new Date(),
     unlockedBadges: ["first_step", "on_fire_3", "on_fire_7", "ace_5", "master_s"],
     subscriptionStatus: "active",
-    trialEndsAt: paidEndsAt,
+    trialEndsAt: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000),
     assignedDoctorId: drRaj._id,
     onboardingComplete: true,
   });
 
-  // A few seeded scores for Sara so the chart isn't empty
   const allExercises = await Exercise.find().lean();
   const sExercise = allExercises.find((e) => e.targetPhonemes.includes("/s/"));
   if (sExercise) {
@@ -167,11 +223,9 @@ async function run() {
     );
   }
 
-  // Pre-create chats so demo flow is smooth
   await Chat.create({ patientId: userAlex._id, doctorId: drPriya._id });
   await Chat.create({ patientId: userSara._id, doctorId: drRaj._id });
 
-  // One pre-assigned exercise for Alex
   if (allExercises[0]) {
     await Assignment.create({
       patientId: userAlex._id,
@@ -184,8 +238,10 @@ async function run() {
 
   void admin;
 
-  console.log(`[seed] done. demo password: ${DEMO_PASSWORD}`);
-  console.log("[seed] accounts: admin@bolchall.demo / dr.priya / dr.raj / dr.pending / patient.alex / patient.sara");
+  console.log(`[seed] done. demo password: ${demoPassword}`);
+  console.log(
+    `[seed] accounts: ${adminEmail} · ${drApproved1Email} · ${drApproved2Email} · ${drPendingEmail} · ${patientTrialEmail} · ${patientPaidEmail} (paid)`
+  );
   await disconnectDB();
   process.exit(0);
 }

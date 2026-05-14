@@ -3,7 +3,7 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../lib/asyncHandler";
 import { Errors } from "../lib/errors";
 import { requireAuth, requireRole } from "../auth/middleware";
-import { ScoreSubmitInput } from "../lib/zodSchemas";
+import { ScoreSubmitInput, TherapistRatingInput } from "../lib/zodSchemas";
 import { Patient } from "../models/Patient";
 import { User } from "../models/User";
 import { Exercise } from "../models/Exercise";
@@ -12,6 +12,11 @@ import { Score } from "../models/Score";
 import { Achievement } from "../models/Achievement";
 import { PhonemeWord } from "../models/PhonemeWord";
 import { DoctorProfile } from "../models/DoctorProfile";
+import { TherapistRating } from "../models/TherapistRating";
+import {
+  assignTrialTherapist,
+  revokeExpiredTrialAssignment,
+} from "../lib/therapistAssignment";
 
 export const patientRouter = Router();
 
@@ -21,6 +26,7 @@ patientRouter.get(
   "/dashboard",
   asyncHandler(async (req, res) => {
     const userId = req.auth!.sub;
+    await revokeExpiredTrialAssignment(userId);
     const patient = await Patient.findOne({ userId }).lean();
     if (!patient) throw Errors.notFound("Patient not found");
 
@@ -65,19 +71,111 @@ patientRouter.get(
     const list = await Assignment.find(filter)
       .sort({ createdAt: -1 })
       .populate("exerciseId", "title description type difficulty targetPhonemes")
+      .populate("doctorId", "name")
       .lean();
     res.json({
       ok: true,
-      data: list.map((a) => ({
-        id: String(a._id),
-        patientId: String(a.patientId),
-        doctorId: String(a.doctorId),
-        exerciseId: String((a.exerciseId as { _id: Types.ObjectId })._id),
-        exerciseTitle: (a.exerciseId as unknown as { title: string }).title,
-        dueAt: a.dueAt?.toISOString() ?? null,
-        completedAt: a.completedAt?.toISOString() ?? null,
-        createdAt: a.createdAt.toISOString(),
-      })),
+      data: list.map((a) => {
+        const ex = a.exerciseId as unknown as {
+          _id: Types.ObjectId;
+          title: string;
+          description: string;
+          type: string;
+          difficulty: string;
+          targetPhonemes: string[];
+        };
+        const doc = a.doctorId as unknown as { _id: Types.ObjectId; name: string };
+        return {
+          id: String(a._id),
+          patientId: String(a.patientId),
+          doctorId: String(doc._id),
+          doctorName: doc.name,
+          exerciseId: String(ex._id),
+          exerciseTitle: ex.title,
+          exerciseType: ex.type,
+          exerciseDifficulty: ex.difficulty,
+          exerciseTargetPhonemes: ex.targetPhonemes ?? [],
+          dueAt: a.dueAt?.toISOString() ?? null,
+          completedAt: a.completedAt?.toISOString() ?? null,
+          reviewedAt: a.reviewedAt?.toISOString() ?? null,
+          therapistFeedback: a.therapistFeedback ?? "",
+          therapistManualScore: a.therapistManualScore ?? null,
+          note: a.note ?? "",
+          createdAt: a.createdAt.toISOString(),
+        };
+      }),
+    });
+  })
+);
+
+// Patient rates their currently-assigned therapist (1–5 stars + optional comment).
+// Updates DoctorProfile.rating with the rolling mean of all ratings for that doctor.
+patientRouter.post(
+  "/therapist/rate",
+  asyncHandler(async (req, res) => {
+    const userId = req.auth!.sub;
+    const input = TherapistRatingInput.parse(req.body);
+
+    const patient = await Patient.findOne({ userId }).select("assignedDoctorId");
+    if (!patient || !patient.assignedDoctorId) {
+      throw Errors.badRequest("You don't have an assigned therapist to rate.");
+    }
+    const doctorId = patient.assignedDoctorId;
+
+    await TherapistRating.findOneAndUpdate(
+      { patientId: userId, doctorId },
+      {
+        $set: {
+          stars: input.stars,
+          comment: input.comment ?? "",
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    // Recompute mean rating for that doctor
+    const all = await TherapistRating.find({ doctorId }).select("stars").lean();
+    const mean =
+      all.length > 0 ? all.reduce((s, r) => s + r.stars, 0) / all.length : 5;
+    await DoctorProfile.updateOne({ userId: doctorId }, { $set: { rating: mean } });
+
+    res.json({
+      ok: true,
+      data: {
+        stars: input.stars,
+        comment: input.comment ?? "",
+        averageRating: Math.round(mean * 10) / 10,
+        ratingCount: all.length,
+      },
+    });
+  })
+);
+
+patientRouter.get(
+  "/therapist/rating",
+  asyncHandler(async (req, res) => {
+    const userId = req.auth!.sub;
+    const patient = await Patient.findOne({ userId }).select("assignedDoctorId").lean();
+    if (!patient?.assignedDoctorId) {
+      res.json({ ok: true, data: { stars: null, comment: "", averageRating: null, ratingCount: 0 } });
+      return;
+    }
+    const myRating = await TherapistRating.findOne({
+      patientId: userId,
+      doctorId: patient.assignedDoctorId,
+    }).lean();
+    const all = await TherapistRating.find({ doctorId: patient.assignedDoctorId })
+      .select("stars")
+      .lean();
+    const mean = all.length > 0 ? all.reduce((s, r) => s + r.stars, 0) / all.length : null;
+    res.json({
+      ok: true,
+      data: {
+        stars: myRating?.stars ?? null,
+        comment: myRating?.comment ?? "",
+        averageRating: mean !== null ? Math.round(mean * 10) / 10 : null,
+        ratingCount: all.length,
+      },
     });
   })
 );
@@ -102,9 +200,20 @@ patientRouter.post(
     const exercise = await Exercise.findById(input.exerciseId).lean();
     if (!exercise) throw Errors.notFound("Exercise not found");
 
+    // If this score belongs to an assignment, validate ownership and link it.
+    let linkedAssignmentId: typeof exercise._id | null = null;
+    if (input.assignmentId) {
+      const linked = await Assignment.findOne({
+        _id: input.assignmentId,
+        patientId: userId,
+      }).select("_id");
+      if (linked) linkedAssignmentId = linked._id;
+    }
+
     const created = await Score.create({
       patientId: userId,
       exerciseId: exercise._id,
+      assignmentId: linkedAssignmentId,
       score: input.score,
       selfRating: input.selfRating,
       audioUrl: input.audioUrl,
@@ -294,6 +403,16 @@ patientRouter.post(
       { new: true }
     );
     if (!patient) throw Errors.notFound("Patient not found");
+
+    // If they previously lost their therapist (trial-expiration revoke), assign a new one now.
+    if (!patient.assignedDoctorId) {
+      try {
+        await assignTrialTherapist(userId);
+      } catch (e) {
+        console.warn("[upgrade-demo] re-assign therapist failed:", e);
+      }
+    }
+
     res.json({
       ok: true,
       data: {
@@ -358,6 +477,7 @@ function serializeExercise(e: LeanLike) {
     isGlobal: e.isGlobal,
     setName: (e.setName as string | undefined) ?? "Warm-up",
     setOrder: (e.setOrder as number | undefined) ?? 0,
+    tier: (e.tier as "beginner" | "intermediate" | "advanced" | undefined) ?? "beginner",
   };
 }
 

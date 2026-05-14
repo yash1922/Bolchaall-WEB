@@ -4,6 +4,7 @@ const ScoreSchema = new Schema(
   {
     patientId: { type: Types.ObjectId, ref: "User", required: true, index: true },
     exerciseId: { type: Types.ObjectId, ref: "Exercise", required: true, index: true },
+    assignmentId: { type: Types.ObjectId, ref: "Assignment", default: null, index: true },
     score: { type: Number, required: true, min: 0, max: 100 },
     selfRating: { type: Number, min: 1, max: 5, default: null },
     audioUrl: { type: String, default: null },

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, Volume2, Star, Sparkles } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -23,6 +23,8 @@ type Stage = "perception" | "production" | "summary";
 
 export default function ExercisePlayer() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const assignmentId = searchParams.get("assignmentId") ?? undefined;
   const router = useRouter();
   const { toast } = useToast();
   const patchPatient = useAuthStore((s) => s.patchPatient);
@@ -133,6 +135,7 @@ export default function ExercisePlayer() {
     try {
       const r = await api.submitScore({
         exerciseId: ex.id,
+        assignmentId, // links to assignment if launched from /app/assignments
         score: result.score,
         selfRating,
         mfccVector: result.mfccMean.length > 0 ? result.mfccMean : undefined,
@@ -195,11 +198,17 @@ export default function ExercisePlayer() {
           <h1 className="font-display text-3xl text-ink-900">{ex.title}</h1>
           <DifficultyBadge level={ex.difficulty} />
           <Badge variant="primary">{ex.type}</Badge>
+          {assignmentId && <Badge variant="warning">therapist-assigned</Badge>}
         </div>
         <p className="text-sm text-ink-600">{ex.description}</p>
         {ex.targetPhonemes.length > 0 && (
           <p className="text-xs text-ink-500 mt-1 font-mono">
             target phonemes: {ex.targetPhonemes.join(" · ")}
+          </p>
+        )}
+        {assignmentId && (
+          <p className="text-xs text-ink-600 dark:text-ink-400 mt-2">
+            Your therapist will see your scores here and reply with feedback once you finish.
           </p>
         )}
       </div>
@@ -239,22 +248,39 @@ export default function ExercisePlayer() {
                   const word = side === "target" ? ex.items[perceptionIdx]?.targetWord : ex.items[perceptionIdx]?.altWord;
                   if (!word) return null;
                   return (
-                    <button
+                    <div
                       key={side}
-                      onClick={() => {
-                        speak(word);
-                        setTimeout(() => answerPerception(side), 600);
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => answerPerception(side)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          answerPerception(side);
+                        }
                       }}
-                      className="rounded-2xl bg-white border-2 border-ink-200 hover:border-brand-400 hover:bg-brand-50 p-6 text-center transition group shadow-soft hover:shadow-lift"
+                      aria-label={`Choose ${word}`}
+                      className="relative rounded-2xl bg-white dark:bg-ink-900 border-2 border-ink-200 dark:border-ink-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-ink-800 p-6 text-center transition group shadow-soft hover:shadow-lift cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     >
-                      <Volume2 className="w-5 h-5 mx-auto mb-2 text-brand-500 group-hover:text-brand-700" />
-                      <p className="font-display text-2xl text-ink-900">{word}</p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speak(word);
+                        }}
+                        aria-label={`Play audio for ${word}`}
+                        className="absolute top-3 right-3 h-9 w-9 rounded-full bg-brand-100 dark:bg-brand-900 hover:bg-brand-200 text-brand-700 dark:text-brand-200 flex items-center justify-center transition shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                      <p className="font-display text-3xl text-ink-900 dark:text-ink-100 mt-2">{word}</p>
+                      <p className="text-[11px] uppercase tracking-wider text-ink-500 mt-3">Click to choose</p>
+                    </div>
                   );
                 })}
               </div>
               <p className="text-xs text-ink-500 mt-4 text-center">
-                Tap the word that matches the prompt. {perceptionRight} correct so far.
+                Tap the speaker to hear a word, then click the card to choose. {perceptionRight} correct so far.
               </p>
             </Card>
           </motion.div>
@@ -303,7 +329,7 @@ export default function ExercisePlayer() {
                 </div>
               </div>
 
-              <AudioRecorder onScored={handleScored} maxDurationMs={4000} />
+              <AudioRecorder onScored={handleScored} maxDurationMs={4000} resetKey={`prod-${productionIdx}`} />
 
               {submitting && (
                 <p className="text-xs text-ink-500 mt-3 text-center">Submitting…</p>
@@ -313,17 +339,44 @@ export default function ExercisePlayer() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="mt-4 rounded-xl bg-brand-50 border-2 border-brand-200 p-4 flex items-center justify-between"
+                  className="mt-4 rounded-xl bg-brand-50 dark:bg-brand-950 border-2 border-brand-200 dark:border-brand-800 p-4"
                 >
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">
-                      Pronunciation score
-                    </p>
-                    <p className="font-display text-4xl text-brand-700">{lastResult.score}</p>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">
+                        Pronunciation score
+                      </p>
+                      <p className="font-display text-4xl text-brand-700 dark:text-brand-300">
+                        {lastResult.score}
+                      </p>
+                    </div>
+                    <Button onClick={nextProduction}>
+                      Next <ArrowRight className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button onClick={nextProduction}>
-                    Next <ArrowRight className="w-4 h-4" />
-                  </Button>
+                  <details className="mt-3 text-xs">
+                    <summary className="cursor-pointer text-ink-600 dark:text-ink-400 hover:text-brand-700 dark:hover:text-brand-300 font-medium">
+                      How is this scored?
+                    </summary>
+                    <div className="mt-2 text-ink-600 dark:text-ink-400 leading-relaxed space-y-1.5">
+                      <p>
+                        Your audio is analyzed in the browser using <strong>MFCC features</strong>
+                        (mel-frequency cepstral coefficients via the <code className="font-mono text-[10px]">meyda</code> library)
+                        — a standard signal representation of speech.
+                      </p>
+                      <p>
+                        Two signals contribute to the score:
+                      </p>
+                      <ul className="list-disc list-inside space-y-0.5 ml-1">
+                        <li><strong>Spectral spread</strong> — articulated speech has more variance than monotone or noise</li>
+                        <li><strong>Frame count</strong> — sustained speech (more than a brief grunt) scores higher</li>
+                      </ul>
+                      <p className="text-ink-500 dark:text-ink-500 italic mt-2">
+                        Note: this measures <strong>signal quality</strong> (clarity + sustained speech), not whether you said the exact target word.
+                        Your assigned therapist will review your recordings and give a manual score for word accuracy.
+                      </p>
+                    </div>
+                  </details>
                 </motion.div>
               )}
             </Card>

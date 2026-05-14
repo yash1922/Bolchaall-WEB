@@ -27,6 +27,12 @@ const ExerciseSchema = new Schema(
     createdById: { type: Types.ObjectId, ref: "User", default: null },
     setName: { type: String, default: "Warm-up", index: true },
     setOrder: { type: Number, default: 0 },
+    tier: {
+      type: String,
+      enum: ["beginner", "intermediate", "advanced"],
+      default: "beginner",
+      index: true,
+    },
   },
   { timestamps: true }
 );
