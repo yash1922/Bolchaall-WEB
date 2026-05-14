@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import { ZodError } from "zod";
 import { connectDB } from "./lib/db";
 import { HttpError } from "./lib/errors";
+import { validateEnv } from "./lib/env";
 import { authRouter } from "./routes/auth";
 import { meRouter } from "./routes/me";
 import { onboardingRouter } from "./routes/onboarding";
@@ -15,28 +16,52 @@ import { patientRouter } from "./routes/patient";
 import { doctorRouter } from "./routes/doctor";
 import { adminRouter } from "./routes/admin";
 import { chatRouter } from "./routes/chat";
+import { uploadRouter } from "./routes/upload";
 import { attachSocket } from "./socket";
+
+validateEnv();
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
-const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:3000";
+// Support a comma-separated list of allowed web origins. Useful in production for
+// "https://app.example.com,https://your-app.vercel.app,https://*-vercel.app".
+// Wildcards on the *.vercel.app subdomain are supported via prefix matching.
+const WEB_ORIGINS = (process.env.WEB_ORIGIN ?? "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true; // server-to-server / curl / health
+  // Dev: allow any localhost port
+  if (process.env.NODE_ENV !== "production" && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+    return true;
+  }
+  for (const allowed of WEB_ORIGINS) {
+    if (allowed === origin) return true;
+    // wildcard subdomain support like https://*.vercel.app
+    if (allowed.includes("*")) {
+      const pattern: string =
+        "^" + allowed.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]+") + "$";
+      const re = new RegExp(pattern);
+      if (re.test(origin)) return true;
+    }
+  }
+  return false;
+}
 
 app.use(helmet());
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? WEB_ORIGIN
-        : (origin, cb) => {
-            if (!origin) return cb(null, true);
-            if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
-            return cb(new Error(`CORS: origin ${origin} not allowed`));
-          },
+    origin: (origin, cb) => {
+      if (isAllowedOrigin(origin)) return cb(null, true);
+      return cb(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
   })
 );
 app.use(cookieParser());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "5mb" })); // base64-encoded uploads need extra room
 app.use(morgan("dev"));
 
 app.get("/api/health", (_req, res) => {
@@ -50,6 +75,7 @@ app.use("/api/patient", patientRouter);
 app.use("/api/doctor", doctorRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/upload", uploadRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ ok: false, error: { code: "NOT_FOUND", message: "Route not found" } });

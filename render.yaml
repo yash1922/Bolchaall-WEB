@@ -1,0 +1,62 @@
+# Render blueprint for the Bolchall API.
+#
+# Usage:
+#   1. Push your repo to GitHub
+#   2. In Render → New → Blueprint → connect this repo
+#   3. Render reads this file and provisions the api service
+#   4. Fill in the env vars marked `sync: false` in the Render UI
+#
+# Notes:
+#  - The `web` package deploys to Vercel separately (see vercel.json in web/).
+#  - This service uses pnpm workspaces. The `rootDir: .` is intentional so the
+#    build can read shared/ types.
+services:
+  - type: web
+    name: bolchall-api
+    runtime: node
+    plan: starter # free / starter / standard — bump up if you need always-on
+    region: oregon # change if needed (oregon | frankfurt | singapore | ohio)
+    rootDir: .
+    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile && pnpm --filter api build
+    startCommand: pnpm --filter api start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: PUBLIC_API_URL
+        sync: false # set to your Render service URL, e.g. https://bolchall-api.onrender.com
+      - key: WEB_ORIGIN
+        sync: false # set to your Vercel URL, e.g. https://bolchall.vercel.app
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL
+        value: 14d
+      - key: BOLCHALL_DEMO_MODE
+        value: "true" # flip to "false" + set STRIPE_* keys to enable real billing
+      - key: BOLCHALL_INCLUDE_DEMO_USERS
+        value: "false" # production starts with no users; bootstrap admin via `pnpm create-admin`
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        value: Bolchall <noreply@bolchall.app>
