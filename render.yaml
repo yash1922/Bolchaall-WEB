@@ -14,7 +14,7 @@ services:
   - type: web
     name: bolchall-api
     runtime: node
-    plan: starter # free / starter / standard — bump up if you need always-on
+    plan: free # free / starter / standard — free sleeps after 15min idle
     region: oregon # change if needed (oregon | frankfurt | singapore | ohio)
     rootDir: .
     buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile && pnpm --filter api build
