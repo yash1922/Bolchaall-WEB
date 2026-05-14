@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Home,
   Mic,
@@ -14,6 +14,8 @@ import {
   Crown,
   Flame,
   ClipboardList,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
 import { api, setAccessToken } from "@/lib/api-client";
@@ -38,6 +40,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   const patient = useAuthStore((s) => s.patient);
   const hydrated = useAuthStore((s) => s.hydrated);
   const clearSession = useAuthStore((s) => s.clearSession);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -49,6 +52,11 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
       router.replace("/welcome");
     }
   }, [hydrated, user, patient, pathname, router]);
+
+  // Auto-close drawer on route change so it doesn't linger after the user navigates
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
     try {
@@ -65,7 +73,25 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-60 border-r border-ink-200 dark:border-ink-700 bg-white/80 dark:bg-ink-950/80 backdrop-blur-xl px-4 py-6 flex flex-col gap-1 sticky top-0 h-screen">
+      {/* Mobile backdrop — visible when drawer is open on small screens */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={cn(
+          "w-60 border-r border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-950 px-4 py-6 flex flex-col gap-1 z-40",
+          // Desktop: sticky in normal layout flow.
+          "md:sticky md:top-0 md:h-screen md:bg-white/80 md:dark:bg-ink-950/80 md:backdrop-blur-xl",
+          // Mobile: fixed slide-over drawer.
+          "fixed inset-y-0 left-0 h-screen transition-transform duration-200",
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
         <Link href="/app" className="flex items-center gap-2 mb-6 px-2">
           <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center text-white shadow-soft">
             <Sparkles className="w-4 h-4" />
@@ -108,8 +134,20 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col">
-        <header className="px-8 py-4 border-b border-ink-200 dark:border-ink-700 flex items-center justify-end gap-3 sticky top-0 bg-white/80 dark:bg-ink-950/80 backdrop-blur-xl z-10">
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="px-4 md:px-8 py-4 border-b border-ink-200 dark:border-ink-700 flex items-center justify-between gap-3 sticky top-0 bg-white/80 dark:bg-ink-950/80 backdrop-blur-xl z-20">
+          {/* Mobile-only hamburger toggle */}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="md:hidden h-9 w-9 rounded-lg flex items-center justify-center text-ink-700 dark:text-ink-200 hover:bg-brand-50 dark:hover:bg-ink-800 transition"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+          {/* Spacer pushes the rest to the right on desktop where the hamburger isn't shown */}
+          <div className="hidden md:block flex-1" />
+          <div className="flex items-center gap-3">
           {patient && (
             <>
               <span className="inline-flex items-center gap-1.5 text-sm text-ink-700 dark:text-ink-300 font-medium">
@@ -128,8 +166,9 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
               )}
             </>
           )}
+          </div>
         </header>
-        <div className="flex-1 px-8 py-8 max-w-6xl mx-auto w-full">
+        <div className="flex-1 px-4 md:px-8 py-6 md:py-8 max-w-6xl mx-auto w-full">
           <PageTransition>{children}</PageTransition>
         </div>
       </main>

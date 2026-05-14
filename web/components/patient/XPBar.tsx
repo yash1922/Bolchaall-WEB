@@ -5,17 +5,17 @@ export function XPBar({ xp }: { xp: number }) {
   const { level, current, next, pct } = xpToLevel(xp);
   return (
     <div className="flex items-center gap-3">
-      <div className="h-10 w-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center">
+      <div className="h-10 w-10 rounded-xl bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 flex items-center justify-center">
         <Zap className="w-4 h-4" />
       </div>
       <div className="flex-1">
-        <div className="flex items-center justify-between text-xs text-ink-600 mb-1 font-medium">
+        <div className="flex items-center justify-between text-xs text-ink-600 dark:text-ink-300 mb-1 font-medium">
           <span>Level {level}</span>
           <span>
             {current} / {next} XP
           </span>
         </div>
-        <div className="h-2.5 rounded-full bg-ink-100 overflow-hidden">
+        <div className="h-2.5 rounded-full bg-ink-100 dark:bg-ink-800 overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-500"
             style={{ width: `${pct}%` }}

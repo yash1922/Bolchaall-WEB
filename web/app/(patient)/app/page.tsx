@@ -53,8 +53,8 @@ export default function PatientDashboard() {
     return (
       <div className="flex flex-col gap-6">
         <div>
-          <div className="h-8 w-64 rounded-lg bg-ink-100 animate-pulse mb-2" />
-          <div className="h-4 w-40 rounded bg-ink-100 animate-pulse" />
+          <div className="h-8 w-64 rounded-lg bg-ink-100 dark:bg-ink-800 animate-pulse mb-2" />
+          <div className="h-4 w-40 rounded bg-ink-100 dark:bg-ink-800 animate-pulse" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (

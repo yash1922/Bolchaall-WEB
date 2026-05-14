@@ -18,7 +18,11 @@ export default function PhonemeRoadmapPage() {
   const [list, setList] = useState<PhonemeWordDTO[] | null>(null);
   const [language, setLanguage] = useState<"all" | "en" | "hi">("en");
   const [error, setError] = useState<string | null>(null);
-  const [completed, setCompleted] = useState<Set<string>>(new Set());
+  // Per-phoneme practice stats: how many exercises targeting this phoneme have been completed,
+  // out of how many exercises target it total. Used to render a thin progress bar on each card.
+  const [phonemeStats, setPhonemeStats] = useState<Map<string, { done: number; total: number }>>(
+    new Map()
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -27,18 +31,19 @@ export default function PhonemeRoadmapPage() {
         const [phonemes, scores] = await Promise.all([api.listPhonemes(), api.patientScores()]);
         if (cancelled) return;
         setList(phonemes);
-        // Mark a phoneme as "practiced" if any score exists for an exercise targeting that phoneme.
-        // We only have scores keyed to exerciseIds, not phonemes, so we use exercise list to map.
         try {
           const exercises = await api.listExercises();
           const completedExerciseIds = new Set(scores.map((s) => s.exerciseId));
-          const practicedPhonemes = new Set<string>();
+          const stats = new Map<string, { done: number; total: number }>();
           for (const ex of exercises) {
-            if (completedExerciseIds.has(ex.id)) {
-              for (const p of ex.targetPhonemes) practicedPhonemes.add(p);
+            for (const p of ex.targetPhonemes) {
+              const cur = stats.get(p) ?? { done: 0, total: 0 };
+              cur.total += 1;
+              if (completedExerciseIds.has(ex.id)) cur.done += 1;
+              stats.set(p, cur);
             }
           }
-          setCompleted(practicedPhonemes);
+          setPhonemeStats(stats);
         } catch {
           // best-effort
         }
@@ -50,6 +55,13 @@ export default function PhonemeRoadmapPage() {
       cancelled = true;
     };
   }, []);
+
+  // Helpers — keep the old "is at least partially practiced" boolean for unlock logic and counting.
+  const isPracticed = (ipa: string) => (phonemeStats.get(ipa)?.done ?? 0) > 0;
+  const isMastered = (ipa: string) => {
+    const s = phonemeStats.get(ipa);
+    return !!s && s.total > 0 && s.done >= s.total;
+  };
 
   const filtered = useMemo(
     () => (list ?? []).filter((p) => language === "all" || p.language === language),
@@ -82,19 +94,19 @@ export default function PhonemeRoadmapPage() {
     if (grouped.beginner.length === 0) {
       out.intermediate = true;
     } else {
-      const begDone = grouped.beginner.filter((p) => completed.has(p.ipa)).length;
+      const begDone = grouped.beginner.filter((p) => isPracticed(p.ipa)).length;
       out.intermediate = begDone / grouped.beginner.length >= 0.6;
     }
     if (out.intermediate) {
       if (grouped.intermediate.length === 0) {
         out.advanced = true;
       } else {
-        const intDone = grouped.intermediate.filter((p) => completed.has(p.ipa)).length;
+        const intDone = grouped.intermediate.filter((p) => isPracticed(p.ipa)).length;
         out.advanced = intDone / grouped.intermediate.length >= 0.6;
       }
     }
     return out;
-  }, [grouped, completed]);
+  }, [grouped, phonemeStats]);
 
   if (error)
     return (
@@ -110,7 +122,7 @@ export default function PhonemeRoadmapPage() {
     );
 
   const overallProgress = filtered.length > 0
-    ? Math.round((filtered.filter((p) => completed.has(p.ipa)).length / filtered.length) * 100)
+    ? Math.round((filtered.filter((p) => isPracticed(p.ipa)).length / filtered.length) * 100)
     : 0;
 
   return (
@@ -165,7 +177,7 @@ export default function PhonemeRoadmapPage() {
         if (phonemes.length === 0) return null;
         const info = TIER_INFO[tier];
         const unlocked = tierUnlocked[tier];
-        const tierDone = phonemes.filter((p) => completed.has(p.ipa)).length;
+        const tierDone = phonemes.filter((p) => isPracticed(p.ipa)).length;
         const tierPct = Math.round((tierDone / phonemes.length) * 100);
 
         return (
@@ -218,25 +230,30 @@ export default function PhonemeRoadmapPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                 {phonemes.map((p, i) => {
                   const meta = getPhonemeMeta(p.ipa, p.category);
-                  const done = completed.has(p.ipa);
+                  const stats = phonemeStats.get(p.ipa) ?? { done: 0, total: 0 };
+                  const pct = stats.total === 0 ? 0 : Math.round((stats.done / stats.total) * 100);
+                  const mastered = isMastered(p.ipa);
+                  const started = stats.done > 0;
                   return (
                     <motion.div
                       key={p.id}
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, delay: tierIdx * 0.05 + i * 0.02 }}
+                      transition={{ duration: 0.25, delay: tierIdx * 0.05 + Math.min(i, 12) * 0.02 }}
                     >
                       <Link
                         href={`/app/phonemes/${p.id}`}
                         className={cn(
                           "group relative flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-4 transition aspect-square",
-                          done
+                          mastered
                             ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-300 dark:border-emerald-700"
+                            : started
+                            ? "bg-brand-50 dark:bg-brand-950 border-brand-200 dark:border-brand-800 hover:border-brand-400"
                             : "bg-white dark:bg-ink-900 border-ink-200 dark:border-ink-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-ink-800"
                         )}
-                        title={meta.importance}
+                        title={`${meta.importance} — ${stats.done}/${stats.total} exercises practiced`}
                       >
-                        {done && (
+                        {mastered && (
                           <CheckCircle2 className="absolute top-1.5 right-1.5 w-4 h-4 text-emerald-500" />
                         )}
                         <span className="font-mono text-xl text-ink-900 dark:text-ink-100">{p.ipa}</span>
@@ -246,6 +263,25 @@ export default function PhonemeRoadmapPage() {
                             voiced
                           </Badge>
                         )}
+                        {/* Per-phoneme progress bar — always reserves height so cards stay aligned */}
+                        <div className="absolute bottom-1.5 left-2 right-2">
+                          <div className="h-1 rounded-full bg-ink-200/60 dark:bg-ink-800/60 overflow-hidden">
+                            <div
+                              className={cn(
+                                "h-full transition-all",
+                                mastered
+                                  ? "bg-emerald-500"
+                                  : "bg-gradient-to-r from-brand-400 to-brand-600"
+                              )}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          {stats.total > 0 && (
+                            <span className="block text-[9px] text-ink-500 dark:text-ink-400 text-center mt-0.5 leading-none">
+                              {stats.done}/{stats.total}
+                            </span>
+                          )}
+                        </div>
                       </Link>
                     </motion.div>
                   );
