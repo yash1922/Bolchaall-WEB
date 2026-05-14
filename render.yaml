@@ -17,8 +17,8 @@ services:
     plan: free # free / starter / standard — free sleeps after 15min idle
     region: oregon # change if needed (oregon | frankfurt | singapore | ohio)
     rootDir: .
-    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile && pnpm --filter api build
-    startCommand: pnpm --filter api start
+    buildCommand: npm install -g pnpm@9.12.0 && pnpm install --frozen-lockfile && pnpm --filter api build
+    startCommand: cd api && node dist/server.js
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
