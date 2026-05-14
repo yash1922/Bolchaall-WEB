@@ -13,6 +13,7 @@ import { RefreshToken } from "../models/RefreshToken";
 import { Patient } from "../models/Patient";
 import { DoctorProfile } from "../models/DoctorProfile";
 import { Emails } from "../services/email";
+import { assignTrialTherapist } from "../lib/therapistAssignment";
 import type { Role } from "shared";
 
 const REFRESH_COOKIE = "bolchall_refresh";
@@ -59,6 +60,13 @@ authRouter.post(
         trialEndsAt,
         onboardingComplete: false,
       });
+      // Auto-match a therapist for the 3-day trial. They'll be revoked when the trial
+      // expires unless the patient upgrades — handled in revokeExpiredTrialAssignment.
+      try {
+        await assignTrialTherapist(user.id);
+      } catch (e) {
+        console.warn("[signup] auto-assign therapist failed:", e);
+      }
       void Emails.patientWelcome(user.email, user.name);
     } else if (input.role === "doctor") {
       await DoctorProfile.create({
@@ -67,7 +75,7 @@ authRouter.post(
         certifications: [],
         experienceYears: 0,
         bio: "",
-        status: "pending",
+        status: "unsubmitted", // gates to /doctor/onboarding until they submit credentials
       });
     }
 

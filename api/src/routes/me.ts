@@ -5,6 +5,7 @@ import { requireAuth } from "../auth/middleware";
 import { User } from "../models/User";
 import { Patient } from "../models/Patient";
 import { DoctorProfile } from "../models/DoctorProfile";
+import { revokeExpiredTrialAssignment } from "../lib/therapistAssignment";
 
 export const meRouter = Router();
 
@@ -28,6 +29,9 @@ meRouter.get(
     };
 
     if (user.role === "patient") {
+      // If trial expired and not on a paid plan, drop the assigned therapist before serving.
+      await revokeExpiredTrialAssignment(userId);
+
       const patient = await Patient.findOne({ userId }).lean();
       if (patient) {
         payload.patient = {
@@ -58,6 +62,19 @@ meRouter.get(
           bio: doctor.bio,
           status: doctor.status,
           rating: doctor.rating,
+          fullName: doctor.fullName ?? "",
+          phone: doctor.phone ?? "",
+          qualification: doctor.qualification ?? "",
+          specialization: doctor.specialization ?? "",
+          linkedinUrl: doctor.linkedinUrl ?? "",
+          clinicName: doctor.clinicName ?? "",
+          govIdUrl: doctor.govIdUrl ?? null,
+          licenseDocUrl: doctor.licenseDocUrl ?? null,
+          certificationsUrls: doctor.certificationsUrls ?? [],
+          adminRemarks: doctor.adminRemarks ?? "",
+          submittedAt: doctor.submittedAt?.toISOString() ?? null,
+          approvedAt: doctor.approvedAt?.toISOString() ?? null,
+          rejectedAt: doctor.rejectedAt?.toISOString() ?? null,
         };
       }
     }
