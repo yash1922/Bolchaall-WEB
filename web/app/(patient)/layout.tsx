@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
 import { api, setAccessToken } from "@/lib/api-client";
+import { prefetchWhisper } from "@/lib/whisper";
 import { CoinCounter } from "@/components/patient/CoinCounter";
 import { PageTransition } from "@/components/providers/PageTransition";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -59,6 +60,15 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  // Kick off the Whisper model download as soon as a patient enters the app
+  // so it's cached + ready before they hit Record. ~40 MB; cached in IndexedDB
+  // after first load. Failure is silent — Web Speech API is the fallback.
+  useEffect(() => {
+    void prefetchWhisper().catch(() => {
+      /* swallow — recorder will gracefully fall back */
+    });
+  }, []);
 
   async function handleLogout() {
     try {

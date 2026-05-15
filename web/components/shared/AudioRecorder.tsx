@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { whisperTranscribe } from "@/lib/whisper";
 import { cn } from "@/lib/utils";
 
 /** Detailed sub-metrics extracted from the recording — surfaced so users see what
@@ -16,13 +17,17 @@ export interface ScoreBreakdown {
   durationMs: number;
   /** Std-dev of MFCC frames — proxy for spectral richness / clarity. */
   mfccVariance: number;
-  /** What the browser's speech recognition heard (best alternative). Empty string
-   *  if no speech recognized or the API isn't supported. */
+  /** What the browser's Web Speech API heard. Empty string if not supported / no result. */
   transcript: string;
-  /** Speech-recognition confidence (0..1) for the top alternative. -1 if not available. */
+  /** Web Speech API confidence (0..1) for the top alternative. -1 if not available. */
   transcriptConfidence: number;
-  /** True if `transcript` matches the `targetWord` after normalization. False if no target. */
+  /** True if the BEST of the two transcripts matches the target word. */
   wordMatched: boolean;
+  /** What the browser-side Whisper model heard (independent second pass).
+   *  Empty if Whisper is still loading, failed, or not enabled. */
+  whisperTranscript: string;
+  /** Which transcript ended up driving the score: "webspeech" | "whisper" | "none". */
+  bestTranscriptSource: "webspeech" | "whisper" | "none";
   /** Heuristic interpretation strings, suitable for UI rendering. */
   notes: string[];
 }
@@ -319,10 +324,12 @@ export function AudioRecorder({ onScored, targetMfcc, targetWord, maxDurationMs 
     // Give SpeechRecognition a tiny grace period to flush its final onresult
     // before we read transcriptRef. ~250ms is enough on Chrome / Safari without
     // adding noticeable user-perceived lag.
-    setTimeout(() => actuallyFinalize(), 250);
+    setTimeout(() => {
+      void actuallyFinalize();
+    }, 250);
   }
 
-  function actuallyFinalize() {
+  async function actuallyFinalize() {
     const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type ?? "audio/webm" });
     setLastBlobUrl(URL.createObjectURL(blob));
 
@@ -340,15 +347,56 @@ export function AudioRecorder({ onScored, targetMfcc, targetWord, maxDurationMs 
     const voicedRatio = rmsFrames.length > 0 ? voicedFrames / rmsFrames.length : 0;
     const mfccVariance = computeMfccVariance(mfccFrames);
 
-    // ---- Real speech recognition result ----
+    // ---- Two-model speech recognition ----
+    // (1) Web Speech API — already captured live during recording (Google/Apple ASR).
+    // (2) Whisper-tiny.en via @huggingface/transformers — runs NOW on the recorded blob,
+    //     fully on-device WASM/WebGPU. Lazy-loaded; first call may take a few seconds
+    //     while the 40 MB model downloads + initialises.
+    //
+    // We take the BEST of the two (highest similarity to target) for scoring. If the
+    // user has no targetWord, we just prefer Whisper since it's generally more accurate.
     const rawTranscript = transcriptRef.current.trim();
     const transcriptConfidence = transcriptConfidenceRef.current;
-    let wordSim = 0;
-    let wordMatched = false;
-    if (targetWord && rawTranscript) {
-      wordSim = wordSimilarity(rawTranscript, targetWord);
-      wordMatched = wordSim >= 0.7; // Allow minor mishears (e.g. "fish" vs "fis")
+
+    // Kick off Whisper, but don't block forever — 8 sec hard cap so the UI never hangs.
+    let whisperTranscript = "";
+    try {
+      whisperTranscript = await Promise.race([
+        whisperTranscribe(blob),
+        new Promise<string>((resolve) => setTimeout(() => resolve(""), 8000)),
+      ]);
+    } catch {
+      whisperTranscript = "";
     }
+
+    // Pick the best transcript = the one with highest similarity to the targetWord.
+    // If no target, prefer Whisper > Web Speech > "" (Whisper is usually more accurate).
+    let bestTranscript = "";
+    let bestSim = 0;
+    let bestSource: "webspeech" | "whisper" | "none" = "none";
+    if (targetWord) {
+      const wsSim = rawTranscript ? wordSimilarity(rawTranscript, targetWord) : 0;
+      const whSim = whisperTranscript ? wordSimilarity(whisperTranscript, targetWord) : 0;
+      if (whSim >= wsSim && whisperTranscript) {
+        bestTranscript = whisperTranscript;
+        bestSim = whSim;
+        bestSource = "whisper";
+      } else if (rawTranscript) {
+        bestTranscript = rawTranscript;
+        bestSim = wsSim;
+        bestSource = "webspeech";
+      }
+    } else {
+      if (whisperTranscript) {
+        bestTranscript = whisperTranscript;
+        bestSource = "whisper";
+      } else if (rawTranscript) {
+        bestTranscript = rawTranscript;
+        bestSource = "webspeech";
+      }
+    }
+    const wordSim = bestSim;
+    const wordMatched = !!targetWord && bestSim >= 0.7;
 
     const notes: string[] = [];
 
@@ -371,9 +419,9 @@ export function AudioRecorder({ onScored, targetMfcc, targetWord, maxDurationMs 
       );
       score = Math.round(wordAccuracy * 0.7 + signalScore * 0.3);
       if (wordMatched) {
-        notes.push(`We heard "${rawTranscript}" — that matches!`);
-      } else if (rawTranscript) {
-        notes.push(`We heard "${rawTranscript}" — try once more, aiming for "${targetWord}".`);
+        notes.push(`We heard "${bestTranscript}" — that matches!`);
+      } else if (bestTranscript) {
+        notes.push(`We heard "${bestTranscript}" — try once more, aiming for "${targetWord}".`);
       } else {
         notes.push(`We couldn't make out a word. Try saying "${targetWord}" clearly.`);
       }
@@ -409,6 +457,8 @@ export function AudioRecorder({ onScored, targetMfcc, targetWord, maxDurationMs 
       transcript: rawTranscript,
       transcriptConfidence,
       wordMatched,
+      whisperTranscript,
+      bestTranscriptSource: bestSource,
       notes,
     };
 

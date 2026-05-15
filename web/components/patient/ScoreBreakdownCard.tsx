@@ -113,34 +113,42 @@ export function ScoreBreakdownCard({
         />
       </div>
 
-      {/* Speech-recognition result row — only render when we actually got a transcript. */}
-      {breakdown.transcript && (
-        <div className="flex items-center gap-2 mb-3 rounded-lg bg-ink-50 dark:bg-ink-800/60 border border-ink-200 dark:border-ink-700 px-3 py-2">
-          <MessageSquare className="w-4 h-4 text-ink-500 dark:text-ink-400 shrink-0" />
-          <div className="flex-1 min-w-0">
+      {/* Two-model speech recognition output — shows both Web Speech API and Whisper.
+          Highlights whichever model "won" (best match to the target). */}
+      {(breakdown.transcript || breakdown.whisperTranscript) && (
+        <div className="mb-3 space-y-2">
+          <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-wider text-ink-500 dark:text-ink-400 font-semibold">
-              Speech model heard
+              Speech recognition (2 models)
             </p>
-            <p className="text-sm text-ink-900 dark:text-ink-100 font-medium truncate">
-              &ldquo;{breakdown.transcript}&rdquo;
-              {breakdown.transcriptConfidence >= 0 && (
-                <span className="ml-2 text-[11px] font-mono text-ink-500 dark:text-ink-400">
-                  conf {(breakdown.transcriptConfidence * 100).toFixed(0)}%
-                </span>
-              )}
-            </p>
+            {breakdown.wordMatched ? (
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Match
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-coral-700 dark:text-coral-300 font-semibold">
+                <XCircle className="w-3.5 h-3.5" />
+                Try again
+              </span>
+            )}
           </div>
-          {breakdown.wordMatched ? (
-            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 font-semibold shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-              Match
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-coral-700 dark:text-coral-300 font-semibold shrink-0">
-              <XCircle className="w-4 h-4" />
-              Try again
-            </span>
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <TranscriptRow
+              label="Web Speech API"
+              source="Google / Apple cloud ASR"
+              text={breakdown.transcript}
+              confidence={breakdown.transcriptConfidence}
+              isBest={breakdown.bestTranscriptSource === "webspeech"}
+            />
+            <TranscriptRow
+              label="Whisper (Xenova/whisper-tiny.en)"
+              source="OpenAI · in-browser WASM"
+              text={breakdown.whisperTranscript}
+              confidence={-1}
+              isBest={breakdown.bestTranscriptSource === "whisper"}
+            />
+          </div>
         </div>
       )}
 
@@ -203,6 +211,51 @@ function Bar({
         <div className={cn("h-full transition-all", fill)} style={{ width: `${pct}%` }} />
       </div>
       <span className="block text-[10px] text-ink-500 dark:text-ink-500 mt-0.5">{raw}</span>
+    </div>
+  );
+}
+
+function TranscriptRow({
+  label,
+  source,
+  text,
+  confidence,
+  isBest,
+}: {
+  label: string;
+  source: string;
+  text: string;
+  confidence: number;
+  isBest: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-3 py-2 transition",
+        isBest
+          ? "border-brand-400 dark:border-brand-600 bg-brand-50 dark:bg-brand-950"
+          : "border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/40"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-wider text-ink-500 dark:text-ink-400 font-semibold truncate">
+          {label}
+        </p>
+        {isBest && (
+          <span className="text-[9px] uppercase tracking-wider text-brand-700 dark:text-brand-300 font-bold shrink-0">
+            best
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-ink-900 dark:text-ink-100 font-medium truncate mt-0.5">
+        {text ? `"${text}"` : <span className="text-ink-500 italic">no result</span>}
+        {confidence >= 0 && text && (
+          <span className="ml-1.5 text-[10px] font-mono text-ink-500 dark:text-ink-400">
+            {(confidence * 100).toFixed(0)}%
+          </span>
+        )}
+      </p>
+      <p className="text-[9px] text-ink-500 dark:text-ink-500 mt-0.5 truncate">{source}</p>
     </div>
   );
 }

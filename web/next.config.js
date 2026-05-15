@@ -5,6 +5,8 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "framer-motion"],
   },
+  // Note: Whisper (transformers.js) is loaded at runtime from a CDN via
+  // `webpackIgnore`, so we don't need any webpack config for it.
   async rewrites() {
     return [
       {
