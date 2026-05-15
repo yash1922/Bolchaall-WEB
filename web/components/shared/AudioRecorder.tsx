@@ -221,10 +221,10 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
     // 1. If basically silent → score 0, surface why.
     let score = 0;
     if (rmsFrames.length < 5 || voicedRatio < 0.1) {
-      notes.push("We didn't pick up any speech — try again, a bit louder.");
+      notes.push("We couldn't quite hear you — give it another go, a bit closer to the mic.");
       score = 0;
     } else if (durationMs < 350) {
-      notes.push("Recording too short — hold the word for at least half a second.");
+      notes.push("That was super quick — hold the word for about a second next time.");
       score = Math.max(0, Math.round(voicedRatio * 30));
     } else {
       // 2. We have real speech. Use MFCC similarity if we have a target, else
@@ -244,13 +244,13 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
         score = Math.round(voicedScore * 0.5 + clarityScore * 0.3 + loudnessScore * 0.2);
       }
 
-      // Encouragement notes for the breakdown card
-      if (voicedRatio < 0.4) notes.push("Lots of pauses — try one steady utterance.");
-      else if (voicedRatio > 0.85) notes.push("Strong, sustained voicing.");
-      if (meanRms < 0.025) notes.push("A bit quiet — speak a touch louder next time.");
-      else if (meanRms > 0.12) notes.push("Great projection.");
-      if (mfccVariance < 8) notes.push("Tone was monotone — exaggerate the vowel.");
-      else if (mfccVariance > 25) notes.push("Rich spectral variation — clear articulation.");
+      // Encouragement notes for the breakdown card — always frame positively.
+      if (voicedRatio < 0.4) notes.push("Try saying it as one steady sound next time.");
+      else if (voicedRatio > 0.85) notes.push("Lovely steady voice — keep that going!");
+      if (meanRms < 0.025) notes.push("A touch louder will help us hear you clearly.");
+      else if (meanRms > 0.12) notes.push("Great clear voice!");
+      if (mfccVariance < 8) notes.push("Try shaping the vowel a bit more — open your mouth.");
+      else if (mfccVariance > 25) notes.push("Crisp articulation — well done!");
     }
 
     const breakdown: ScoreBreakdown = {

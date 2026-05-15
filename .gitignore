@@ -14,7 +14,8 @@ Thumbs.db
 coverage
 *.tsbuildinfo
 
-# Claude local settings (per-developer; launch.json is shared)
-.claude/settings.local.json
-.claude/projects/
-.claude/plans/
+# Claude folder — ignore entirely (per-developer / per-machine)
+.claude/
+
+# PPT prompt drafts (kept local for the presentation, not part of the codebase)
+PPT_PROMPT.md

@@ -178,9 +178,9 @@ export default function ExercisePlayer() {
     setLastResult({ score: result.score, selfRating, breakdown: result.breakdown });
     if (result.score === 0) {
       toast({
-        title: "Score: 0 — no speech detected",
-        description: "We didn't pick up the word. Check your mic and try again.",
-        variant: "error",
+        title: "Let's try once more",
+        description: "We couldn't quite hear you that time — give it another go!",
+        variant: "info",
       });
       return; // Don't waste an XP submission on silence
     }

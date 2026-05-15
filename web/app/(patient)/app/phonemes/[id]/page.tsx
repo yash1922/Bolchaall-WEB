@@ -109,9 +109,9 @@ export default function PhonemeDetail() {
 
     if (result.score === 0) {
       toast({
-        title: "Score: 0 — no speech detected",
-        description: "Check your mic, then try again. We need to hear the word clearly.",
-        variant: "error",
+        title: "Let's try that again",
+        description: "We couldn't quite catch your voice — make sure your mic is on and have another go.",
+        variant: "info",
       });
       setRecorderKey((k) => k + 1);
       return;

@@ -18,21 +18,73 @@ import { cn } from "@/lib/utils";
  * plays each chunk separately via TTS, and asks the player to pick the
  * full word from 4 options.
  *
- * The phoneme split is approximate — we use a simple letter-cluster
- * heuristic since we don't ship a full IPA dictionary in the browser.
- * Good enough for a fun activity, not for clinical-grade phonics.
+ * For each chunk we provide both:
+ *   - `display`: shown on screen (e.g. "/sh/")
+ *   - `spoken`: the string passed to SpeechSynthesis. Browser TTS spells
+ *     short letter pairs ("sh" -> "S-H") instead of pronouncing the sound,
+ *     so we use phonetic approximations that engines actually pronounce
+ *     correctly (e.g. "shhh" sounds like /ʃ/, "thuh" sounds like /θ/, etc.).
  */
-const ROUND_BANK: Array<{ word: string; chunks: string[]; distractors: string[] }> = [
-  { word: "cat", chunks: ["c", "a", "t"], distractors: ["bat", "cap", "cab"] },
-  { word: "dog", chunks: ["d", "o", "g"], distractors: ["dot", "log", "dig"] },
-  { word: "fish", chunks: ["f", "i", "sh"], distractors: ["dish", "fist", "wish"] },
-  { word: "ship", chunks: ["sh", "i", "p"], distractors: ["chip", "sip", "skip"] },
-  { word: "milk", chunks: ["m", "i", "lk"], distractors: ["silk", "mink", "milt"] },
-  { word: "frog", chunks: ["f", "r", "o", "g"], distractors: ["flog", "frock", "from"] },
-  { word: "hand", chunks: ["h", "a", "n", "d"], distractors: ["band", "hang", "land"] },
-  { word: "star", chunks: ["s", "t", "a", "r"], distractors: ["spar", "stir", "stab"] },
-  { word: "book", chunks: ["b", "oo", "k"], distractors: ["boot", "look", "back"] },
-  { word: "tree", chunks: ["t", "r", "ee"], distractors: ["three", "free", "trick"] },
+type Chunk = { display: string; spoken: string };
+type Round = { word: string; chunks: Chunk[]; distractors: string[] };
+
+// Maps a written chunk to its TTS-friendly form. Add to this as we discover
+// digraphs that don't pronounce naturally on Chrome / Safari / Firefox voices.
+const SPOKEN: Record<string, string> = {
+  // Vowels — TTS often spells single letters; pad with extra vowel sound.
+  a: "ahh",
+  e: "ehh",
+  i: "ihh",
+  o: "ahh",
+  u: "uhh",
+  // Long vowels
+  ee: "eeee",
+  oo: "ooooh",
+  ay: "ay",
+  // Consonants — single letters TTS will spell, so use phonetic stretch.
+  b: "buh",
+  c: "kuh",
+  d: "duh",
+  f: "fuh",
+  g: "guh",
+  h: "huh",
+  k: "kuh",
+  l: "luh",
+  m: "mmm",
+  n: "nnn",
+  p: "puh",
+  r: "ruh",
+  s: "sss",
+  t: "tuh",
+  v: "vuh",
+  w: "wuh",
+  // Digraphs — the main culprits for letter-spelling.
+  sh: "shhh",
+  ch: "chuh",
+  th: "thuh",
+  ph: "fuh",
+  ng: "ngg",
+  // Consonant clusters at end of word
+  lk: "luhk",
+  nd: "nduh",
+  st: "stuh",
+};
+
+function chunk(d: string): Chunk {
+  return { display: d, spoken: SPOKEN[d] ?? d };
+}
+
+const ROUND_BANK: Round[] = [
+  { word: "cat",  chunks: ["c", "a", "t"].map(chunk),       distractors: ["bat", "cap", "cab"] },
+  { word: "dog",  chunks: ["d", "o", "g"].map(chunk),       distractors: ["dot", "log", "dig"] },
+  { word: "fish", chunks: ["f", "i", "sh"].map(chunk),      distractors: ["dish", "fist", "wish"] },
+  { word: "ship", chunks: ["sh", "i", "p"].map(chunk),      distractors: ["chip", "sip", "skip"] },
+  { word: "milk", chunks: ["m", "i", "lk"].map(chunk),      distractors: ["silk", "mink", "milt"] },
+  { word: "frog", chunks: ["f", "r", "o", "g"].map(chunk),  distractors: ["flog", "frock", "from"] },
+  { word: "hand", chunks: ["h", "a", "n", "d"].map(chunk),  distractors: ["band", "hang", "land"] },
+  { word: "star", chunks: ["s", "t", "a", "r"].map(chunk),  distractors: ["spar", "stir", "stab"] },
+  { word: "book", chunks: ["b", "oo", "k"].map(chunk),      distractors: ["boot", "look", "back"] },
+  { word: "tree", chunks: ["t", "r", "ee"].map(chunk),      distractors: ["three", "free", "trick"] },
 ];
 
 const ROUNDS_PER_GAME = 6;
@@ -41,7 +93,7 @@ export default function PhonemeBlendingGame() {
   const { toast } = useToast();
   const patchPatient = useAuthStore((s) => s.patchPatient);
 
-  const [rounds, setRounds] = useState<typeof ROUND_BANK>([]);
+  const [rounds, setRounds] = useState<Round[]>([]);
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -72,10 +124,12 @@ export default function PhonemeBlendingGame() {
     if (typeof window === "undefined") return;
     window.speechSynthesis.cancel();
     round.chunks.forEach((c, i) => {
-      const u = new SpeechSynthesisUtterance(c);
-      u.rate = 0.55;
-      // Stagger so they're heard separately
-      setTimeout(() => window.speechSynthesis.speak(u), i * 700);
+      // Use the TTS-friendly `spoken` form so digraphs aren't spelled out.
+      const u = new SpeechSynthesisUtterance(c.spoken);
+      u.rate = 0.7;
+      u.pitch = 1.0;
+      // Stagger so they're heard as discrete sounds
+      setTimeout(() => window.speechSynthesis.speak(u), i * 800);
     });
   }
 
@@ -215,7 +269,7 @@ export default function PhonemeBlendingGame() {
                 className="px-2 py-0.5 rounded bg-ink-100 dark:bg-ink-800 font-mono"
                 title="One sound chunk"
               >
-                /{c}/
+                /{c.display}/
               </span>
             ))}
           </div>

@@ -26,16 +26,18 @@ export function ScoreBreakdownCard({
   const voicedPct = Math.min(100, Math.round(breakdown.voicedRatio * 100));
   const clarityPct = Math.min(100, Math.round((breakdown.mfccVariance / 40) * 100));
   const durationSec = (breakdown.durationMs / 1000).toFixed(1);
+  // Encouraging, never harsh. Low scores frame the next try as a small adjustment,
+  // not a failure — kids especially need this on hard articulation drills.
   const verdict =
     score === 0
-      ? "No score awarded"
+      ? "Let's give it another try"
       : score >= 80
-      ? "Excellent attempt"
+      ? "Beautifully done"
       : score >= 60
-      ? "Solid attempt"
+      ? "Nice work — keep going"
       : score >= 30
-      ? "Keep practicing"
-      : "Barely audible";
+      ? "Good start — try once more"
+      : "Almost there — a little louder next time";
 
   return (
     <motion.div

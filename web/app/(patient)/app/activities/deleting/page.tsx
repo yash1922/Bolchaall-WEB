@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Scissors, Sparkles, Volume2, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Sparkles, Volume2, XCircle } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -18,7 +18,19 @@ import { cn } from "@/lib/utils";
  *
  * Each round picks a target word, removes one phoneme-like chunk, and
  * asks the player to identify the resulting word from 4 options.
+ *
+ * Per UX request: we DO NOT play the whole word back — only the sound
+ * to drop. The patient sees the word written and hears the target sound.
+ * For that one sound to actually pronounce (vs being spelled), we use a
+ * phonetic stretch ("buh", "shhh") instead of the bare letter.
  */
+const SPOKEN_SOUND: Record<string, string> = {
+  b: "buh", c: "kuh", d: "duh", f: "fuh", g: "guh", h: "huh",
+  k: "kuh", l: "luh", m: "mmm", n: "nnn", p: "puh", r: "ruh",
+  s: "sss", t: "tuh", v: "vuh", w: "wuh",
+  sh: "shhh", ch: "chuh", th: "thuh", ph: "fuh",
+};
+
 const ROUND_BANK: Array<{
   word: string;
   drop: string;            // chunk to remove
@@ -61,18 +73,12 @@ export default function PhonemeDeletingGame() {
     return shuffle([round.result, ...round.distractors.slice(0, 3)]);
   }, [round]);
 
-  function speakWord() {
-    if (!round || typeof window === "undefined") return;
-    const u = new SpeechSynthesisUtterance(round.word);
-    u.rate = 0.85;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  }
-
-  function speakSound(sound: string) {
+  function speakSound(rawSound: string) {
     if (typeof window === "undefined") return;
-    const u = new SpeechSynthesisUtterance(sound);
-    u.rate = 0.55;
+    // Use the phonetic stretch so TTS pronounces the sound rather than spelling.
+    const spoken = SPOKEN_SOUND[rawSound.toLowerCase()] ?? rawSound;
+    const u = new SpeechSynthesisUtterance(spoken);
+    u.rate = 0.7;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   }
@@ -85,13 +91,13 @@ export default function PhonemeDeletingGame() {
       setCorrectCount((n) => n + 1);
       playApplause("soft");
     }
-    // Speak the correct answer for reinforcement
+    // Speak the correct answer for reinforcement (the resulting word, not the original)
     setTimeout(() => {
       const u = new SpeechSynthesisUtterance(round.result);
       u.rate = 0.9;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(u);
-    }, 200);
+    }, 250);
     setTimeout(() => {
       const next = idx + 1;
       if (next >= rounds.length) {
@@ -204,22 +210,27 @@ export default function PhonemeDeletingGame() {
       <Card>
         <CardHeader
           title={round?.prompt ?? "Listen carefully"}
-          subtitle="Tap to hear the word, then pick what's left when you drop the sound."
+          subtitle="Tap to hear the sound you'll drop, then pick what's left of the word."
           action={<Badge variant="primary">Round {idx + 1}</Badge>}
         />
-        <div className="flex flex-col items-center gap-3 py-2">
-          <div className="flex gap-2">
-            <Button onClick={speakWord} variant="primary">
-              <Volume2 className="w-4 h-4" />
-              Hear &quot;{round?.word}&quot;
-            </Button>
-            <Button onClick={() => round && speakSound(round.drop)} variant="outline">
-              <Scissors className="w-4 h-4" />
-              Hear /{round?.drop}/
-            </Button>
+        <div className="flex flex-col items-center gap-4 py-3">
+          {/* The word to read silently — big and centered so kids see it clearly */}
+          <div className="text-center">
+            <p className="text-xs uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1">
+              The word
+            </p>
+            <p className="font-display text-5xl text-ink-900 dark:text-ink-100">
+              {round?.word}
+            </p>
           </div>
+          {/* Only the sound to drop is played aloud */}
+          <Button onClick={() => round && speakSound(round.drop)} variant="primary" size="lg">
+            <Volume2 className="w-5 h-5" />
+            Hear the sound to drop
+          </Button>
           <p className="text-xs text-ink-500 dark:text-ink-400 text-center">
-            Drop /{round?.drop}/ from <span className="font-mono">{round?.word}</span> — what&apos;s left?
+            Drop the <span className="font-mono">/{round?.drop}/</span> sound from{" "}
+            <span className="font-mono font-semibold">{round?.word}</span> — what&apos;s left?
           </p>
         </div>
       </Card>
