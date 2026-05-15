@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, Mic, Sparkles, Star, Volume2 } from "lucide-react";
+import { Activity, CheckCircle2, MessageSquare, Mic, Sparkles, Star, Volume2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ScoreBreakdown } from "@/components/shared/AudioRecorder";
 
@@ -112,6 +112,37 @@ export function ScoreBreakdownCard({
           color="gold"
         />
       </div>
+
+      {/* Speech-recognition result row — only render when we actually got a transcript. */}
+      {breakdown.transcript && (
+        <div className="flex items-center gap-2 mb-3 rounded-lg bg-ink-50 dark:bg-ink-800/60 border border-ink-200 dark:border-ink-700 px-3 py-2">
+          <MessageSquare className="w-4 h-4 text-ink-500 dark:text-ink-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-ink-500 dark:text-ink-400 font-semibold">
+              Speech model heard
+            </p>
+            <p className="text-sm text-ink-900 dark:text-ink-100 font-medium truncate">
+              &ldquo;{breakdown.transcript}&rdquo;
+              {breakdown.transcriptConfidence >= 0 && (
+                <span className="ml-2 text-[11px] font-mono text-ink-500 dark:text-ink-400">
+                  conf {(breakdown.transcriptConfidence * 100).toFixed(0)}%
+                </span>
+              )}
+            </p>
+          </div>
+          {breakdown.wordMatched ? (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 font-semibold shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+              Match
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-coral-700 dark:text-coral-300 font-semibold shrink-0">
+              <XCircle className="w-4 h-4" />
+              Try again
+            </span>
+          )}
+        </div>
+      )}
 
       {breakdown.notes.length > 0 && (
         <ul className="space-y-1 text-xs text-ink-700 dark:text-ink-300 border-t border-ink-200 dark:border-ink-700 pt-3">

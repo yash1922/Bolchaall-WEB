@@ -381,7 +381,12 @@ export default function ExercisePlayer() {
                 </div>
               </div>
 
-              <AudioRecorder onScored={handleScored} maxDurationMs={4000} resetKey={`prod-${productionIdx}`} />
+              <AudioRecorder
+                onScored={handleScored}
+                targetWord={ex.items[productionIdx]?.targetWord}
+                maxDurationMs={4000}
+                resetKey={`prod-${productionIdx}`}
+              />
 
               {submitting && (
                 <p className="text-xs text-ink-500 mt-3 text-center">Submitting…</p>
@@ -395,18 +400,20 @@ export default function ExercisePlayer() {
                       breakdown={lastResult.breakdown}
                       caption={
                         lastResult.score === 0
-                          ? "We didn't capture any speech. Re-record before moving on."
+                          ? "We didn't catch your voice — record once more, or skip to the next item."
                           : "Here's what we measured from your recording."
                       }
                     />
                   )}
-                  {lastResult.score > 0 && (
-                    <div className="flex items-center justify-end">
-                      <Button onClick={nextProduction}>
-                        Next <ArrowRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-end">
+                    <Button
+                      onClick={nextProduction}
+                      variant={lastResult.score === 0 ? "ghost" : "primary"}
+                    >
+                      {lastResult.score === 0 ? "Skip to next" : "Next"}{" "}
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </Card>

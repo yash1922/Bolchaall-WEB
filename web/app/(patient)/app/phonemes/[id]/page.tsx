@@ -308,6 +308,7 @@ export default function PhonemeDetail() {
         <AudioRecorder
           key={recorderKey}
           onScored={handleScored}
+          targetWord={selectedWord ?? undefined}
           maxDurationMs={4000}
           resetKey={`${selectedWord}-${recorderKey}`}
         />

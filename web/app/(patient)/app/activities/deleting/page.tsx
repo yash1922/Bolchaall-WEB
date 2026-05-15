@@ -24,30 +24,39 @@ import { cn } from "@/lib/utils";
  * For that one sound to actually pronounce (vs being spelled), we use a
  * phonetic stretch ("buh", "shhh") instead of the bare letter.
  */
+// Map a single letter / digraph to a TTS-friendly phonetic stretch.
+// Browser TTS spells short utterances like "t" -> "T" or "sh" -> "S-H".
+// These padded forms get pronounced as the actual sound.
 const SPOKEN_SOUND: Record<string, string> = {
-  b: "buh", c: "kuh", d: "duh", f: "fuh", g: "guh", h: "huh",
-  k: "kuh", l: "luh", m: "mmm", n: "nnn", p: "puh", r: "ruh",
-  s: "sss", t: "tuh", v: "vuh", w: "wuh",
-  sh: "shhh", ch: "chuh", th: "thuh", ph: "fuh",
+  b: "buh", c: "kuh", d: "duh", f: "fffff", g: "guh", h: "huh",
+  k: "kuh", l: "lll", m: "mmmm", n: "nnnn", p: "puh", r: "rrrr",
+  s: "ssssss", t: "tuh", v: "vvvv", w: "wuh", z: "zzzz",
+  sh: "shhhh", ch: "chuh", th: "thhh", ph: "fffff",
 };
 
+// Each round has a target word, the sound to drop, the resulting valid English
+// word, and 3 distractor options. ALL `result` and `distractors` MUST be real
+// English words (we removed "rog", "gor", and other made-up strings that
+// previously confused kids).
 const ROUND_BANK: Array<{
   word: string;
-  drop: string;            // chunk to remove
-  result: string;          // the resulting word
-  prompt: string;          // human-readable prompt
+  drop: string;
+  result: string;
+  prompt: string;
   distractors: string[];
 }> = [
-  { word: "cart",  drop: "c", result: "art",  prompt: "Say 'cart'. Now drop the /k/ sound.",  distractors: ["car", "art", "tar", "rat"].filter((x) => x !== "art") },
-  { word: "stop",  drop: "s", result: "top",  prompt: "Say 'stop'. Now drop the /s/ sound.",  distractors: ["stop", "tip", "pot"].filter((x) => x !== "top") },
-  { word: "play",  drop: "p", result: "lay",  prompt: "Say 'play'. Now drop the /p/ sound.",  distractors: ["pay", "lay", "ply", "lap"].filter((x) => x !== "lay") },
-  { word: "snail", drop: "s", result: "nail", prompt: "Say 'snail'. Now drop the /s/ sound.", distractors: ["sail", "nail", "tail", "snip"].filter((x) => x !== "nail") },
-  { word: "frog",  drop: "f", result: "rog",  prompt: "Say 'frog'. Now drop the /f/ sound.",  distractors: ["frog", "fog", "rog", "gor"].filter((x) => x !== "rog") },
-  { word: "track", drop: "t", result: "rack", prompt: "Say 'track'. Now drop the /t/ sound.", distractors: ["rack", "tack", "trick", "rock"].filter((x) => x !== "rack") },
-  { word: "smile", drop: "s", result: "mile", prompt: "Say 'smile'. Now drop the /s/ sound.", distractors: ["mile", "slime", "mild", "smile"].filter((x) => x !== "mile") },
-  { word: "spot",  drop: "s", result: "pot",  prompt: "Say 'spot'. Now drop the /s/ sound.",  distractors: ["pot", "top", "spot", "sop"].filter((x) => x !== "pot") },
-  { word: "brain", drop: "b", result: "rain", prompt: "Say 'brain'. Now drop the /b/ sound.", distractors: ["rain", "brain", "ban", "ran"].filter((x) => x !== "rain") },
-  { word: "place", drop: "p", result: "lace", prompt: "Say 'place'. Now drop the /p/ sound.", distractors: ["lace", "pace", "place", "pale"].filter((x) => x !== "lace") },
+  { word: "cart",  drop: "c",  result: "art",  prompt: "Say 'cart'. Now drop the /k/ sound.",  distractors: ["car", "tar", "rat"] },
+  { word: "stop",  drop: "s",  result: "top",  prompt: "Say 'stop'. Now drop the /s/ sound.",  distractors: ["pot", "tip", "stop"] },
+  { word: "play",  drop: "p",  result: "lay",  prompt: "Say 'play'. Now drop the /p/ sound.",  distractors: ["pay", "ply", "lap"] },
+  { word: "snail", drop: "s",  result: "nail", prompt: "Say 'snail'. Now drop the /s/ sound.", distractors: ["sail", "tail", "snip"] },
+  { word: "track", drop: "t",  result: "rack", prompt: "Say 'track'. Now drop the /t/ sound.", distractors: ["tack", "trick", "rock"] },
+  { word: "smile", drop: "s",  result: "mile", prompt: "Say 'smile'. Now drop the /s/ sound.", distractors: ["slime", "mild", "smile"] },
+  { word: "spot",  drop: "s",  result: "pot",  prompt: "Say 'spot'. Now drop the /s/ sound.", distractors: ["top", "spot", "sop"] },
+  { word: "brain", drop: "b",  result: "rain", prompt: "Say 'brain'. Now drop the /b/ sound.", distractors: ["brain", "ban", "ran"] },
+  { word: "place", drop: "p",  result: "lace", prompt: "Say 'place'. Now drop the /p/ sound.", distractors: ["pace", "place", "pale"] },
+  { word: "spin",  drop: "s",  result: "pin",  prompt: "Say 'spin'. Now drop the /s/ sound.",  distractors: ["pen", "spin", "pan"] },
+  { word: "sport", drop: "s",  result: "port", prompt: "Say 'sport'. Now drop the /s/ sound.", distractors: ["sport", "part", "pour"] },
+  { word: "speak", drop: "s",  result: "peak", prompt: "Say 'speak'. Now drop the /s/ sound.", distractors: ["speak", "peek", "pack"] },
 ];
 
 const ROUNDS_PER_GAME = 6;

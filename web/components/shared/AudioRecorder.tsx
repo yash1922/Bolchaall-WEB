@@ -16,6 +16,13 @@ export interface ScoreBreakdown {
   durationMs: number;
   /** Std-dev of MFCC frames — proxy for spectral richness / clarity. */
   mfccVariance: number;
+  /** What the browser's speech recognition heard (best alternative). Empty string
+   *  if no speech recognized or the API isn't supported. */
+  transcript: string;
+  /** Speech-recognition confidence (0..1) for the top alternative. -1 if not available. */
+  transcriptConfidence: number;
+  /** True if `transcript` matches the `targetWord` after normalization. False if no target. */
+  wordMatched: boolean;
   /** Heuristic interpretation strings, suitable for UI rendering. */
   notes: string[];
 }
@@ -25,10 +32,62 @@ interface Props {
   onScored: (result: { score: number; mfccMean: number[]; blob: Blob; breakdown: ScoreBreakdown }) => void;
   /** Optional baseline MFCC vector to compare against. If omitted, scoring uses signal quality only. */
   targetMfcc?: number[];
+  /** The word the user is supposed to say. Enables real word-match verification via
+   *  the browser's SpeechRecognition API + folds match accuracy into the final score. */
+  targetWord?: string;
   maxDurationMs?: number;
   className?: string;
   /** Change this prop value (e.g. exercise item index) to force the recorder to reset between items. */
   resetKey?: string | number;
+}
+
+// Minimal Web Speech API typing — TS doesn't ship them by default.
+type SpeechRecognitionEvent = Event & {
+  results: ArrayLike<ArrayLike<{ transcript: string; confidence: number }>>;
+};
+type SpeechRecognitionInstance = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onerror: ((e: Event) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
+
+function getSpeechRecognition(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+/** Light Levenshtein-distance similarity (0..1) for fuzzy word matching. */
+function wordSimilarity(a: string, b: string): number {
+  const x = a.toLowerCase().trim();
+  const y = b.toLowerCase().trim();
+  if (x === y) return 1;
+  if (x.length === 0 || y.length === 0) return 0;
+  // Simple Levenshtein
+  const m = x.length;
+  const n = y.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i]![0] = i;
+  for (let j = 0; j <= n; j++) dp[0]![j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = x[i - 1] === y[j - 1] ? 0 : 1;
+      dp[i]![j] = Math.min(dp[i - 1]![j]! + 1, dp[i]![j - 1]! + 1, dp[i - 1]![j - 1]! + cost);
+    }
+  }
+  const distance = dp[m]![n]!;
+  return Math.max(0, 1 - distance / Math.max(m, n));
 }
 
 const DEFAULT_MAX_MS = 4000;
@@ -36,7 +95,7 @@ const DEFAULT_MAX_MS = 4000;
 // for typical browser microphone gain — anything below this is mic noise / room tone.
 const SILENCE_RMS_THRESHOLD = 0.012;
 
-export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MAX_MS, className, resetKey }: Props) {
+export function AudioRecorder({ onScored, targetMfcc, targetWord, maxDurationMs = DEFAULT_MAX_MS, className, resetKey }: Props) {
   const [state, setState] = useState<"idle" | "recording" | "scoring" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -49,6 +108,11 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
   const meydaAnalyzerRef = useRef<{ stop: () => void } | null>(null);
   const mfccFramesRef = useRef<number[][]>([]);
   const rmsFramesRef = useRef<number[]>([]);
+  // Web Speech API recognizer + the best transcript captured during this recording.
+  // Runs in parallel with MediaRecorder so we get a real word-level transcription.
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const transcriptRef = useRef<string>("");
+  const transcriptConfidenceRef = useRef<number>(-1);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef<number>(0);
@@ -86,6 +150,12 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
     stopTimerRef.current = null;
     meydaAnalyzerRef.current?.stop();
     meydaAnalyzerRef.current = null;
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* recognition may already be ended */
+    }
+    recognitionRef.current = null;
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
     }
@@ -102,6 +172,8 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
     chunksRef.current = [];
     mfccFramesRef.current = [];
     rmsFramesRef.current = [];
+    transcriptRef.current = "";
+    transcriptConfidenceRef.current = -1;
     if (lastBlobUrl) {
       URL.revokeObjectURL(lastBlobUrl);
       setLastBlobUrl(null);
@@ -156,6 +228,44 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
       console.warn("Meyda init failed; will fall back to signal-quality scoring.", e);
     }
 
+    // ---- Real speech recognition (Web Speech API) ----
+    // Runs in parallel with MediaRecorder. Listens to the live mic via the OS
+    // speech recognizer (Google's online for Chrome, Apple's for Safari) and
+    // returns the most likely word the user said.
+    const SR = getSpeechRecognition();
+    if (SR) {
+      try {
+        const recognition = new SR();
+        recognition.lang = "en-US";
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 3;
+        recognition.onresult = (e) => {
+          // Capture the highest-confidence final transcript we've seen.
+          for (let i = 0; i < e.results.length; i++) {
+            const alt = e.results[i]?.[0];
+            if (!alt) continue;
+            // We keep the longest non-empty transcript (final results are usually
+            // longer than interims; this is a tiny but reliable heuristic).
+            if (alt.transcript && alt.transcript.length > transcriptRef.current.length) {
+              transcriptRef.current = alt.transcript;
+              transcriptConfidenceRef.current =
+                typeof alt.confidence === "number" && Number.isFinite(alt.confidence)
+                  ? alt.confidence
+                  : -1;
+            }
+          }
+        };
+        recognition.onerror = () => {
+          // Permission / network errors — leave transcript empty, MFCC scoring still works.
+        };
+        recognition.start();
+        recognitionRef.current = recognition;
+      } catch (e) {
+        console.warn("[AudioRecorder] SpeechRecognition init failed:", e);
+      }
+    }
+
     const recorder = new MediaRecorder(stream);
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -179,6 +289,13 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    // Stop speech recognition first so it has a chance to fire its final onresult
+    // synchronously before MediaRecorder.onstop kicks off finalizeScore.
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       setState("scoring");
       recorderRef.current.stop();
@@ -199,6 +316,13 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
   }
 
   function finalizeScore() {
+    // Give SpeechRecognition a tiny grace period to flush its final onresult
+    // before we read transcriptRef. ~250ms is enough on Chrome / Safari without
+    // adding noticeable user-perceived lag.
+    setTimeout(() => actuallyFinalize(), 250);
+  }
+
+  function actuallyFinalize() {
     const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type ?? "audio/webm" });
     setLastBlobUrl(URL.createObjectURL(blob));
 
@@ -215,10 +339,20 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
     const voicedFrames = rmsFrames.filter((r) => r > SILENCE_RMS_THRESHOLD).length;
     const voicedRatio = rmsFrames.length > 0 ? voicedFrames / rmsFrames.length : 0;
     const mfccVariance = computeMfccVariance(mfccFrames);
+
+    // ---- Real speech recognition result ----
+    const rawTranscript = transcriptRef.current.trim();
+    const transcriptConfidence = transcriptConfidenceRef.current;
+    let wordSim = 0;
+    let wordMatched = false;
+    if (targetWord && rawTranscript) {
+      wordSim = wordSimilarity(rawTranscript, targetWord);
+      wordMatched = wordSim >= 0.7; // Allow minor mishears (e.g. "fish" vs "fis")
+    }
+
     const notes: string[] = [];
 
     // ---- Score logic ----
-    // 1. If basically silent → score 0, surface why.
     let score = 0;
     if (rmsFrames.length < 5 || voicedRatio < 0.1) {
       notes.push("We couldn't quite hear you — give it another go, a bit closer to the mic.");
@@ -226,25 +360,39 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
     } else if (durationMs < 350) {
       notes.push("That was super quick — hold the word for about a second next time.");
       score = Math.max(0, Math.round(voicedRatio * 30));
-    } else {
-      // 2. We have real speech. Use MFCC similarity if we have a target, else
-      //    composite of voice activity + clarity + loudness.
-      if (targetMfcc && targetMfcc.length === mfccMean.length && mfccMean.length > 0) {
-        const sim = cosineSimilarity(targetMfcc, mfccMean);
-        // Map cosine [-1,1] → [0,100]
-        const accuracy = Math.max(0, Math.min(100, ((sim + 1) / 2) * 100));
-        // Penalize quiet / mostly-silent attempts even if MFCC matches noise
-        score = Math.round(accuracy * (0.4 + 0.6 * voicedRatio));
-        notes.push(`Pronunciation match: ${Math.round(accuracy)}/100`);
+    } else if (targetWord) {
+      // Real word-match scoring: combines what the speech model heard with signal quality.
+      // 70% transcription accuracy + 30% signal quality = honest "did you say the word AND say it clearly?"
+      const wordAccuracy = wordSim * 100; // 0..100 from string similarity
+      const signalScore = Math.round(
+        Math.min(100, voicedRatio * 100) * 0.5 +
+          Math.min(100, (mfccVariance / 40) * 100) * 0.3 +
+          Math.min(100, (meanRms / 0.08) * 100) * 0.2
+      );
+      score = Math.round(wordAccuracy * 0.7 + signalScore * 0.3);
+      if (wordMatched) {
+        notes.push(`We heard "${rawTranscript}" — that matches!`);
+      } else if (rawTranscript) {
+        notes.push(`We heard "${rawTranscript}" — try once more, aiming for "${targetWord}".`);
       } else {
-        // No reference — composite quality score
-        const voicedScore = Math.min(100, voicedRatio * 100);              // 0..100
-        const clarityScore = Math.min(100, (mfccVariance / 40) * 100);     // 0..100
-        const loudnessScore = Math.min(100, (meanRms / 0.08) * 100);       // 0..100
-        score = Math.round(voicedScore * 0.5 + clarityScore * 0.3 + loudnessScore * 0.2);
+        notes.push(`We couldn't make out a word. Try saying "${targetWord}" clearly.`);
       }
+    } else if (targetMfcc && targetMfcc.length === mfccMean.length && mfccMean.length > 0) {
+      // MFCC reference path (no target word but a reference fingerprint)
+      const sim = cosineSimilarity(targetMfcc, mfccMean);
+      const accuracy = Math.max(0, Math.min(100, ((sim + 1) / 2) * 100));
+      score = Math.round(accuracy * (0.4 + 0.6 * voicedRatio));
+      notes.push(`Pronunciation match: ${Math.round(accuracy)}/100`);
+    } else {
+      // No target — composite signal-quality score (legacy path)
+      const voicedScore = Math.min(100, voicedRatio * 100);
+      const clarityScore = Math.min(100, (mfccVariance / 40) * 100);
+      const loudnessScore = Math.min(100, (meanRms / 0.08) * 100);
+      score = Math.round(voicedScore * 0.5 + clarityScore * 0.3 + loudnessScore * 0.2);
+    }
 
-      // Encouragement notes for the breakdown card — always frame positively.
+    if (score > 0) {
+      // Encouragement notes — always frame positively.
       if (voicedRatio < 0.4) notes.push("Try saying it as one steady sound next time.");
       else if (voicedRatio > 0.85) notes.push("Lovely steady voice — keep that going!");
       if (meanRms < 0.025) notes.push("A touch louder will help us hear you clearly.");
@@ -258,6 +406,9 @@ export function AudioRecorder({ onScored, targetMfcc, maxDurationMs = DEFAULT_MA
       voicedRatio: Number(voicedRatio.toFixed(3)),
       durationMs: Math.round(durationMs),
       mfccVariance: Number(mfccVariance.toFixed(2)),
+      transcript: rawTranscript,
+      transcriptConfidence,
+      wordMatched,
       notes,
     };
 

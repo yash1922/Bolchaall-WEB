@@ -123,14 +123,17 @@ export default function PhonemeBlendingGame() {
     if (!round) return;
     if (typeof window === "undefined") return;
     window.speechSynthesis.cancel();
-    round.chunks.forEach((c, i) => {
-      // Use the TTS-friendly `spoken` form so digraphs aren't spelled out.
-      const u = new SpeechSynthesisUtterance(c.spoken);
-      u.rate = 0.7;
-      u.pitch = 1.0;
-      // Stagger so they're heard as discrete sounds
-      setTimeout(() => window.speechSynthesis.speak(u), i * 800);
-    });
+    // Browsers can't reliably pronounce isolated phonemes via TTS — they spell
+    // letters or output garbled "uh" sounds. The honest workable approach for
+    // a blending game is to play the WHOLE WORD slowly so the child can hear
+    // the sequence of sounds unfold, then play it again at normal speed.
+    const slow = new SpeechSynthesisUtterance(round.word);
+    slow.rate = 0.45;        // dragged-out so each sound is audible
+    slow.pitch = 1.05;
+    window.speechSynthesis.speak(slow);
+    const normal = new SpeechSynthesisUtterance(round.word);
+    normal.rate = 0.85;
+    setTimeout(() => window.speechSynthesis.speak(normal), 1900);
   }
 
   async function pick(option: string) {
