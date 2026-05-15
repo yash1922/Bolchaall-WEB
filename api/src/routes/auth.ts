@@ -67,6 +67,8 @@ authRouter.post(
         userId: user._id,
         language: "en",
         conditions: [],
+        age: input.age ?? null,
+        phone: input.phone ?? "",
         subscriptionStatus: "trial",
         trialEndsAt,
         onboardingComplete: false,

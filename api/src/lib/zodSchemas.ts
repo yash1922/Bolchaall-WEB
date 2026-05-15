@@ -5,6 +5,9 @@ export const SignupInput = z.object({
   password: z.string().min(8).max(100),
   name: z.string().min(1).max(80),
   role: z.enum(["patient", "doctor"]).default("patient"),
+  // Optional patient-only fields collected at signup. Backend ignores them for doctor role.
+  age: z.number().int().min(1).max(120).optional(),
+  phone: z.string().min(7).max(40).optional(),
 });
 export type SignupInputT = z.infer<typeof SignupInput>;
 
@@ -86,3 +89,12 @@ export const AssignExerciseInput = z.object({
   dueAt: z.string().datetime().optional(),
 });
 export type AssignExerciseInputT = z.infer<typeof AssignExerciseInput>;
+
+export const ActivityScoreInput = z.object({
+  activity: z.enum(["phoneme_blending", "phoneme_deleting"]),
+  correct: z.number().int().min(0).max(50),
+  total: z.number().int().min(1).max(50),
+  // Optional context (which words / sounds were used) — kept for future analytics
+  notes: z.string().max(400).optional(),
+});
+export type ActivityScoreInputT = z.infer<typeof ActivityScoreInput>;

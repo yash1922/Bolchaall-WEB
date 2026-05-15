@@ -18,20 +18,64 @@ chatRouter.get(
   asyncHandler(async (req, res) => {
     const userId = req.auth!.sub;
     const role = req.auth!.role;
-    const filter = role === "patient" ? { patientId: userId } : { doctorId: userId };
-    const chats = await Chat.find(filter).sort({ lastMessageAt: -1 }).lean();
-    if (chats.length === 0) {
-      // For patients with an assigned doctor but no chat row yet, lazy-create
-      if (role === "patient") {
-        const patient = await Patient.findOne({ userId }).lean();
-        if (patient?.assignedDoctorId) {
+
+    // Scope chats to the CURRENT therapist relationship only.
+    //  - Patient: only see the chat with their currently-assigned doctor (history with old
+    //    therapists stays in the DB but is hidden from both sides on re-assignment)
+    //  - Doctor: only see chats with patients who are currently assigned to them
+    //  - Admin: see everything (moderation)
+    type ChatLean = {
+      _id: unknown;
+      patientId: unknown;
+      doctorId: unknown;
+      lastMessageAt?: Date | null;
+      unreadByPatient: number;
+      unreadByDoctor: number;
+    };
+    let chats: ChatLean[] = [];
+
+    if (role === "patient") {
+      const patient = await Patient.findOne({ userId }).lean();
+      if (patient?.assignedDoctorId) {
+        // Lazy-create the chat row if this is the first time we see this pair
+        let chat = (await Chat.findOne({
+          patientId: userId,
+          doctorId: patient.assignedDoctorId,
+        }).lean()) as ChatLean | null;
+        if (!chat) {
           const created = await Chat.create({
             patientId: userId,
             doctorId: patient.assignedDoctorId,
           });
-          chats.push(created.toObject() as (typeof chats)[number]);
+          chat = created.toObject() as ChatLean;
+        }
+        chats = [chat];
+      }
+    } else if (role === "doctor") {
+      // Find all patients currently assigned to this doctor
+      const myPatients = await Patient.find({ assignedDoctorId: userId })
+        .select("userId")
+        .lean();
+      const patientUserIds = myPatients.map((p) => p.userId);
+      if (patientUserIds.length > 0) {
+        chats = (await Chat.find({
+          doctorId: userId,
+          patientId: { $in: patientUserIds },
+        })
+          .sort({ lastMessageAt: -1 })
+          .lean()) as ChatLean[];
+        // Lazy-create chats for assigned patients that don't have a chat row yet
+        const haveChatFor = new Set(chats.map((c) => String(c.patientId)));
+        for (const pid of patientUserIds) {
+          if (!haveChatFor.has(String(pid))) {
+            const created = await Chat.create({ patientId: pid, doctorId: userId });
+            chats.push(created.toObject() as ChatLean);
+          }
         }
       }
+    } else {
+      // Admin — show all chats unfiltered
+      chats = (await Chat.find({}).sort({ lastMessageAt: -1 }).lean()) as ChatLean[];
     }
 
     const userIds = new Set<string>();
@@ -134,11 +178,28 @@ chatRouter.post(
 async function ensureMembership(chatId: string, userId: string, role: string) {
   const chat = await Chat.findById(chatId);
   if (!chat) throw Errors.notFound("Chat not found");
-  const allowed =
+  // Base membership: must actually be a party to this chat.
+  const isMember =
     (role === "patient" && String(chat.patientId) === userId) ||
     (role === "doctor" && String(chat.doctorId) === userId) ||
     role === "admin";
-  if (!allowed) throw Errors.forbidden("Not a chat member");
+  if (!isMember) throw Errors.forbidden("Not a chat member");
+  // Stricter check: the relationship must STILL be active. After re-assignment
+  // the old chat is hidden — refuse direct URL access too.
+  if (role === "patient") {
+    const patient = await Patient.findOne({ userId }).select("assignedDoctorId").lean();
+    if (!patient || String(patient.assignedDoctorId ?? "") !== String(chat.doctorId)) {
+      throw Errors.forbidden("Chat archived — your therapist has changed");
+    }
+  } else if (role === "doctor") {
+    const stillMine = await Patient.exists({
+      userId: chat.patientId,
+      assignedDoctorId: userId,
+    });
+    if (!stillMine) {
+      throw Errors.forbidden("Chat archived — patient is no longer assigned to you");
+    }
+  }
   return chat as unknown as {
     _id: Types.ObjectId;
     patientId: Types.ObjectId;

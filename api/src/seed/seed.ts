@@ -236,6 +236,54 @@ async function run() {
     });
   }
 
+  // ---- Demo: Dr. Priya authors a CUSTOM exercise and assigns it to Sara ----
+  // Demonstrates the therapist-creates-exercise + therapist-reviews-recording loop.
+  // The 1 attempt below is intentionally left UNREVIEWED so testers see the
+  // doctor inbox light up with a "needs review" item.
+  const priyaCustomExercise = await Exercise.create({
+    title: "Dr. Priya's /sh/ minimal pairs",
+    description:
+      "Custom drill from your therapist — perception + production for the /sh/ vs /s/ contrast.",
+    targetPhonemes: ["/sh/", "/s/"],
+    type: "production",
+    difficulty: "medium",
+    items: [
+      { prompt: "Say it slowly", targetWord: "sheep" },
+      { prompt: "Say it slowly", targetWord: "ship" },
+      { prompt: "Say it slowly", targetWord: "shore" },
+      { prompt: "Say it slowly", targetWord: "shoe" },
+    ],
+    audioRefUrl: null,
+    isGlobal: false, // therapist-authored, NOT in the public library
+    setName: "Dr. Priya — Custom",
+    setOrder: 1,
+    tier: "intermediate",
+    createdById: drPriya._id,
+  });
+
+  const saraCustomAssignment = await Assignment.create({
+    patientId: userSara._id,
+    doctorId: drPriya._id,
+    exerciseId: priyaCustomExercise._id,
+    dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    note: "Sara — focus on the /sh/ vs /s/ contrast this week. Submit at least 4 attempts.",
+    completedAt: new Date(Date.now() - 60 * 60 * 1000), // pretend she finished an hour ago
+    // therapistFeedback / therapistManualScore intentionally LEFT EMPTY so the
+    // doctor's inbox shows a "needs review" item.
+  });
+
+  // Also create a chat thread between Sara and Priya so the new therapist
+  // relationship has a place to live (Sara is currently with Raj — but for
+  // the demo flow we model Priya as also being involved on this exercise).
+  await Score.create({
+    patientId: userSara._id,
+    exerciseId: priyaCustomExercise._id,
+    assignmentId: saraCustomAssignment._id,
+    score: 78,
+    selfRating: 4,
+    audioUrl: null,
+  });
+
   void admin;
 
   console.log(`[seed] done. demo password: ${demoPassword}`);

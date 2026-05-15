@@ -3,7 +3,7 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../lib/asyncHandler";
 import { Errors } from "../lib/errors";
 import { requireAuth, requireRole } from "../auth/middleware";
-import { ScoreSubmitInput, TherapistRatingInput } from "../lib/zodSchemas";
+import { ScoreSubmitInput, TherapistRatingInput, ActivityScoreInput } from "../lib/zodSchemas";
 import { Patient } from "../models/Patient";
 import { User } from "../models/User";
 import { Exercise } from "../models/Exercise";
@@ -283,6 +283,68 @@ patientRouter.post(
   })
 );
 
+/**
+ * POST /api/patient/activity-score
+ * Award XP/coins for the gamified phoneme blending / deleting activities.
+ * Mirrors the logic of POST /scores but with no exerciseId (activities aren't
+ * exercises) and uses accuracy% as the score input.
+ */
+patientRouter.post(
+  "/activity-score",
+  asyncHandler(async (req, res) => {
+    const userId = req.auth!.sub;
+    const input = ActivityScoreInput.parse(req.body);
+    const accuracy = Math.round((input.correct / input.total) * 100);
+
+    const patient = await Patient.findOne({ userId });
+    if (!patient) throw Errors.notFound("Patient not found");
+
+    const xpGain = Math.round(accuracy / 5);
+    const coinGain = 10 + (accuracy >= 80 ? 30 : 0);
+    patient.xp += xpGain;
+    patient.coins += coinGain;
+
+    // Streak bookkeeping (same logic as score-submit)
+    const now = new Date();
+    if (!patient.lastPracticedAt) {
+      patient.streakDays = 1;
+    } else {
+      const last = patient.lastPracticedAt;
+      const sameDay =
+        last.getFullYear() === now.getFullYear() &&
+        last.getMonth() === now.getMonth() &&
+        last.getDate() === now.getDate();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const wasYesterday =
+        last.getFullYear() === yesterday.getFullYear() &&
+        last.getMonth() === yesterday.getMonth() &&
+        last.getDate() === yesterday.getDate();
+      if (sameDay) {
+        // unchanged
+      } else if (wasYesterday) {
+        patient.streakDays += 1;
+      } else {
+        patient.streakDays = 1;
+      }
+    }
+    patient.lastPracticedAt = now;
+    await patient.save();
+
+    res.json({
+      ok: true,
+      data: {
+        accuracy,
+        xpGained: xpGain,
+        coinsGained: coinGain,
+        totalXp: patient.xp,
+        totalCoins: patient.coins,
+        streakDays: patient.streakDays,
+      },
+    });
+  })
+);
+
 patientRouter.get(
   "/phonemes",
   asyncHandler(async (req, res) => {
@@ -435,6 +497,8 @@ function serializePatient(p: LeanLike) {
     userId: String(p.userId),
     language: p.language,
     conditions: p.conditions,
+    age: typeof p.age === "number" ? p.age : null,
+    phone: typeof p.phone === "string" ? p.phone : "",
     xp: p.xp,
     coins: p.coins,
     streakDays: p.streakDays,

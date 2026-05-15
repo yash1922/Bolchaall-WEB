@@ -24,6 +24,8 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [age, setAge] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +38,18 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
     try {
-      const { user, accessToken } = await api.signup({ name, email, password, role });
+      const ageNum = age.trim() ? Number(age) : undefined;
+      if (role === "patient" && ageNum !== undefined && (!Number.isFinite(ageNum) || ageNum < 1 || ageNum > 120)) {
+        throw new Error("Please enter a valid age between 1 and 120.");
+      }
+      const { user, accessToken } = await api.signup({
+        name,
+        email,
+        password,
+        role,
+        ...(role === "patient" && ageNum !== undefined ? { age: ageNum } : {}),
+        ...(role === "patient" && phone.trim() ? { phone: phone.trim() } : {}),
+      });
       setAccessToken(accessToken);
       const me = await api.me();
       setSession(me);
@@ -96,6 +109,33 @@ export default function SignupPage() {
               placeholder="you@example.com"
             />
           </FormField>
+          {role === "patient" && (
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Age" htmlFor="age" hint="Helps your therapist tailor practice.">
+                <Input
+                  id="age"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={120}
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder="e.g. 8"
+                />
+              </FormField>
+              <FormField label="Phone" htmlFor="phone" hint="So we can reach you if needed.">
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                />
+              </FormField>
+            </div>
+          )}
           <FormField
             label="Password"
             htmlFor="password"

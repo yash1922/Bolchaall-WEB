@@ -9,7 +9,8 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge, DifficultyBadge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
-import { AudioRecorder } from "@/components/shared/AudioRecorder";
+import { AudioRecorder, type ScoreBreakdown } from "@/components/shared/AudioRecorder";
+import { ScoreBreakdownCard } from "@/components/patient/ScoreBreakdownCard";
 import { SpeakingCharacter } from "@/components/shared/SpeakingCharacter";
 import { BadgeUnlockBurst } from "@/components/patient/BadgeUnlockBurst";
 import { useToast } from "@/components/ui/Toast";
@@ -38,6 +39,7 @@ export default function ExercisePlayer() {
   const [lastResult, setLastResult] = useState<{
     score: number;
     selfRating: number | null;
+    breakdown: ScoreBreakdown | null;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selfRating, setSelfRating] = useState<number | null>(null);
@@ -99,18 +101,54 @@ export default function ExercisePlayer() {
     window.speechSynthesis.speak(u);
   }
 
-  function answerPerception(picked: "target" | "alt") {
+  async function answerPerception(picked: "target" | "alt") {
     if (picked === "target") setPerceptionRight((n) => n + 1);
     const next = perceptionIdx + 1;
     if (!ex) return;
     if (next >= ex.items.length) {
-      const accuracy = ((perceptionRight + (picked === "target" ? 1 : 0)) / ex.items.length) * 100;
-      if (accuracy >= 80) {
-        setPerceptionUnlocked(true);
+      const finalRight = perceptionRight + (picked === "target" ? 1 : 0);
+      const accuracy = (finalRight / ex.items.length) * 100;
+      const accuracyRounded = Math.round(accuracy);
+
+      // Award XP/coins for perception too — previously perception was unscored
+      // even though it's real practice. We submit the accuracy as the score so
+      // it shows up in "Recent scores" and feeds streak / achievements.
+      try {
+        const r = await api.submitScore({
+          exerciseId: ex.id,
+          assignmentId,
+          score: accuracyRounded,
+          selfRating: null,
+        });
+        patchPatient({
+          xp: r.totalXp,
+          coins: r.totalCoins,
+          streakDays: r.streakDays,
+        });
         toast({
-          title: `${Math.round(accuracy)}% — production unlocked`,
+          title: `Perception: ${accuracyRounded}% — +${r.xpGained} XP, +${r.coinsGained} coins`,
+          description:
+            r.newlyUnlockedBadges.length > 0
+              ? `Unlocked: ${r.newlyUnlockedBadges.join(", ")}`
+              : `${finalRight} of ${ex.items.length} correct`,
           variant: "success",
         });
+        if (r.newlyUnlockedBadges.length > 0) {
+          const code = r.newlyUnlockedBadges[0]!;
+          const meta = achievementsMap.get(code) ?? { name: code, description: "Badge unlocked" };
+          setUnlockedBadge(meta);
+          playChime();
+        }
+      } catch (e) {
+        toast({
+          title: `${accuracyRounded}% on perception (could not save)`,
+          description: e instanceof Error ? e.message : String(e),
+          variant: "error",
+        });
+      }
+
+      if (accuracy >= 80) {
+        setPerceptionUnlocked(true);
         if (ex.type === "perception") {
           setStage("summary");
         } else {
@@ -118,7 +156,7 @@ export default function ExercisePlayer() {
         }
       } else {
         toast({
-          title: `${Math.round(accuracy)}% — try again to unlock production`,
+          title: `${accuracyRounded}% — try again to unlock production`,
           variant: "info",
         });
         setPerceptionIdx(0);
@@ -129,8 +167,23 @@ export default function ExercisePlayer() {
     }
   }
 
-  async function handleScored(result: { score: number; mfccMean: number[]; blob: Blob }) {
+  async function handleScored(result: {
+    score: number;
+    mfccMean: number[];
+    blob: Blob;
+    breakdown: ScoreBreakdown;
+  }) {
     if (!ex) return;
+    // Always show the breakdown card so the user understands the score (esp. when 0).
+    setLastResult({ score: result.score, selfRating, breakdown: result.breakdown });
+    if (result.score === 0) {
+      toast({
+        title: "Score: 0 — no speech detected",
+        description: "We didn't pick up the word. Check your mic and try again.",
+        variant: "error",
+      });
+      return; // Don't waste an XP submission on silence
+    }
     setSubmitting(true);
     try {
       const r = await api.submitScore({
@@ -140,7 +193,6 @@ export default function ExercisePlayer() {
         selfRating,
         mfccVector: result.mfccMean.length > 0 ? result.mfccMean : undefined,
       });
-      setLastResult({ score: result.score, selfRating });
       setScoresSubmitted((n) => n + 1);
       setTotalXp(r.totalXp);
       patchPatient({
@@ -336,48 +388,26 @@ export default function ExercisePlayer() {
               )}
 
               {lastResult && !submitting && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="mt-4 rounded-xl bg-brand-50 dark:bg-brand-950 border-2 border-brand-200 dark:border-brand-800 p-4"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">
-                        Pronunciation score
-                      </p>
-                      <p className="font-display text-4xl text-brand-700 dark:text-brand-300">
-                        {lastResult.score}
-                      </p>
+                <div className="mt-4 space-y-3">
+                  {lastResult.breakdown && (
+                    <ScoreBreakdownCard
+                      score={lastResult.score}
+                      breakdown={lastResult.breakdown}
+                      caption={
+                        lastResult.score === 0
+                          ? "We didn't capture any speech. Re-record before moving on."
+                          : "Here's what we measured from your recording."
+                      }
+                    />
+                  )}
+                  {lastResult.score > 0 && (
+                    <div className="flex items-center justify-end">
+                      <Button onClick={nextProduction}>
+                        Next <ArrowRight className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button onClick={nextProduction}>
-                      Next <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <details className="mt-3 text-xs">
-                    <summary className="cursor-pointer text-ink-600 dark:text-ink-400 hover:text-brand-700 dark:hover:text-brand-300 font-medium">
-                      How is this scored?
-                    </summary>
-                    <div className="mt-2 text-ink-600 dark:text-ink-400 leading-relaxed space-y-1.5">
-                      <p>
-                        Your audio is analyzed in the browser using <strong>MFCC features</strong>
-                        (mel-frequency cepstral coefficients via the <code className="font-mono text-[10px]">meyda</code> library)
-                        — a standard signal representation of speech.
-                      </p>
-                      <p>
-                        Two signals contribute to the score:
-                      </p>
-                      <ul className="list-disc list-inside space-y-0.5 ml-1">
-                        <li><strong>Spectral spread</strong> — articulated speech has more variance than monotone or noise</li>
-                        <li><strong>Frame count</strong> — sustained speech (more than a brief grunt) scores higher</li>
-                      </ul>
-                      <p className="text-ink-500 dark:text-ink-500 italic mt-2">
-                        Note: this measures <strong>signal quality</strong> (clarity + sustained speech), not whether you said the exact target word.
-                        Your assigned therapist will review your recordings and give a manual score for word accuracy.
-                      </p>
-                    </div>
-                  </details>
-                </motion.div>
+                  )}
+                </div>
               )}
             </Card>
           </motion.div>

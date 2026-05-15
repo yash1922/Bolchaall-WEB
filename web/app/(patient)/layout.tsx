@@ -14,6 +14,7 @@ import {
   Crown,
   Flame,
   ClipboardList,
+  Gamepad2,
   Menu,
   X,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const NAV = [
   { href: "/app", label: "Dashboard", icon: Home },
   { href: "/app/phonemes", label: "Phonemes", icon: BookOpen },
   { href: "/app/exercise/free", label: "Free practice", icon: Mic },
+  { href: "/app/activities", label: "Activities", icon: Gamepad2 },
   { href: "/app/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/app/therapist", label: "Therapist", icon: Stethoscope },
   { href: "/app/chat", label: "Chat", icon: MessageCircle },

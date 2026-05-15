@@ -1,9 +1,13 @@
 import { Patient } from "../models/Patient";
 import { DoctorProfile } from "../models/DoctorProfile";
+import { Chat } from "../models/Chat";
 
 /**
  * Pick the approved doctor with the smallest active roster and assign them
  * as the trial-period therapist for the given patient.
+ *
+ * Also ensures a Chat row exists for the new (patient, doctor) pair so the
+ * chat appears immediately in both inboxes.
  *
  * Returns the assigned doctor's userId or null if no approved doctor exists.
  */
@@ -20,10 +24,23 @@ export async function assignTrialTherapist(patientUserId: string): Promise<strin
   counts.sort((a, b) => a.count - b.count);
   const pickedDoctorId = counts[0]!.userId;
 
-  await Patient.updateOne(
+  const result = await Patient.updateOne(
     { userId: patientUserId, assignedDoctorId: null },
     { $set: { assignedDoctorId: pickedDoctorId } }
   );
+
+  // Only create the chat if we actually changed the assignment (avoids
+  // dupes if this gets called twice). The unique compound index on
+  // (patientId, doctorId) also prevents duplicates as a safety net.
+  if (result.modifiedCount > 0) {
+    try {
+      await Chat.create({ patientId: patientUserId, doctorId: pickedDoctorId });
+    } catch (e) {
+      // E11000 = duplicate key — a chat already exists for this pair, fine.
+      const code = (e as { code?: number }).code;
+      if (code !== 11000) throw e;
+    }
+  }
   return String(pickedDoctorId);
 }
 

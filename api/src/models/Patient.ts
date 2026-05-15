@@ -11,6 +11,8 @@ const PatientSchema = new Schema(
     },
     language: { type: String, enum: ["en", "hi"], default: "en" },
     conditions: { type: [String], default: [] },
+    age: { type: Number, default: null, min: 1, max: 120 },
+    phone: { type: String, default: "" },
     xp: { type: Number, default: 0, min: 0 },
     coins: { type: Number, default: 0, min: 0 },
     streakDays: { type: Number, default: 0, min: 0 },

@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { MouthDiagram } from "@/components/phonemes/MouthDiagram";
-import { AudioRecorder } from "@/components/shared/AudioRecorder";
+import { AudioRecorder, type ScoreBreakdown } from "@/components/shared/AudioRecorder";
+import { ScoreBreakdownCard } from "@/components/patient/ScoreBreakdownCard";
 import { api } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/store";
 import { playApplause } from "@/lib/sounds";
@@ -31,6 +32,7 @@ export default function PhonemeDetail() {
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [lastScore, setLastScore] = useState<number | null>(null);
+  const [lastBreakdown, setLastBreakdown] = useState<ScoreBreakdown | null>(null);
   const [sessionAttempts, setSessionAttempts] = useState(0);
   const [recorderKey, setRecorderKey] = useState(0); // bump to reset recorder after submission
   const recorderTopRef = useRef<HTMLDivElement | null>(null);
@@ -94,13 +96,33 @@ export default function PhonemeDetail() {
     window.speechSynthesis.speak(u);
   }
 
-  async function handleScored(result: { score: number; mfccMean: number[]; blob: Blob }) {
+  async function handleScored(result: {
+    score: number;
+    mfccMean: number[];
+    blob: Blob;
+    breakdown: ScoreBreakdown;
+  }) {
+    // Always show the breakdown — even on score 0 — so the user sees WHY.
+    setLastScore(result.score);
+    setLastBreakdown(result.breakdown);
+    setSessionAttempts((n) => n + 1);
+
+    if (result.score === 0) {
+      toast({
+        title: "Score: 0 — no speech detected",
+        description: "Check your mic, then try again. We need to hear the word clearly.",
+        variant: "error",
+      });
+      setRecorderKey((k) => k + 1);
+      return;
+    }
+
     if (!targetExercise) {
       toast({
-        title: "No matching exercise found",
+        title: `Score: ${result.score}/100 (preview only)`,
         description:
-          "Score capture works only when at least one exercise targets this phoneme. Use the Practice button below for now.",
-        variant: "error",
+          "No exercise is linked to this phoneme yet, so we can't save XP. The breakdown below shows what we measured.",
+        variant: "info",
       });
       return;
     }
@@ -112,8 +134,6 @@ export default function PhonemeDetail() {
         selfRating: null,
         mfccVector: result.mfccMean.length > 0 ? result.mfccMean : undefined,
       });
-      setLastScore(result.score);
-      setSessionAttempts((n) => n + 1);
       // Optimistically append to local history so per-phoneme stats update without a refetch
       setPastScores((prev) => [
         ...prev,
@@ -298,42 +318,14 @@ export default function PhonemeDetail() {
           </p>
         )}
 
-        {lastScore !== null && !submitting && (
-          <motion.div
-            key={`score-${sessionAttempts}`}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mt-4 rounded-xl border-2 border-brand-300 dark:border-brand-700 bg-brand-50 dark:bg-brand-950 p-4 flex items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-brand-500 text-white flex items-center justify-center font-display text-xl">
-                {lastScore}
-              </div>
-              <div>
-                <p className="font-semibold text-ink-900 dark:text-ink-100">
-                  {lastScore >= 80
-                    ? "Excellent!"
-                    : lastScore >= 60
-                    ? "Good — try once more"
-                    : "Keep practicing"}
-                </p>
-                <p className="text-xs text-ink-600 dark:text-ink-400">
-                  Attempt {sessionAttempts} this session
-                </p>
-              </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-1 text-gold-500">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star
-                  key={i}
-                  className={cn(
-                    "w-4 h-4",
-                    i < Math.round(lastScore / 20) ? "fill-gold-500" : "text-ink-300 dark:text-ink-700"
-                  )}
-                />
-              ))}
-            </div>
-          </motion.div>
+        {lastScore !== null && lastBreakdown && !submitting && (
+          <div className="mt-4">
+            <ScoreBreakdownCard
+              score={lastScore}
+              breakdown={lastBreakdown}
+              caption={`Attempt ${sessionAttempts} this session`}
+            />
+          </div>
         )}
       </Card>
 

@@ -91,7 +91,7 @@ export class ApiError extends Error {
 
 export const api = {
   // ---- auth ----
-  signup: (body: { email: string; password: string; name: string; role: "patient" | "doctor" }) =>
+  signup: (body: { email: string; password: string; name: string; role: "patient" | "doctor"; age?: number; phone?: string }) =>
     request<{ user: import("shared").UserDTO; accessToken: string }>("/api/auth/signup", {
       method: "POST",
       body,
@@ -133,6 +133,20 @@ export const api = {
       `/api/patient/assignments${open ? "?open=true" : ""}`
     ),
   patientScores: () => request<import("shared").ScoreDTO[]>("/api/patient/scores"),
+  submitActivityScore: (body: {
+    activity: "phoneme_blending" | "phoneme_deleting";
+    correct: number;
+    total: number;
+    notes?: string;
+  }) =>
+    request<{
+      accuracy: number;
+      xpGained: number;
+      coinsGained: number;
+      totalXp: number;
+      totalCoins: number;
+      streakDays: number;
+    }>("/api/patient/activity-score", { method: "POST", body }),
   submitScore: (body: {
     exerciseId: string;
     score: number;

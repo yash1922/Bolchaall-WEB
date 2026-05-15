@@ -39,6 +39,8 @@ meRouter.get(
           userId: String(patient.userId),
           language: patient.language,
           conditions: patient.conditions,
+          age: typeof (patient as { age?: number | null }).age === "number" ? (patient as { age: number }).age : null,
+          phone: typeof (patient as { phone?: string }).phone === "string" ? (patient as { phone: string }).phone : "",
           xp: patient.xp,
           coins: patient.coins,
           streakDays: patient.streakDays,

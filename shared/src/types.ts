@@ -26,6 +26,8 @@ export interface PatientDTO {
   userId: string;
   language: Language;
   conditions: string[];
+  age: number | null;
+  phone: string;
   xp: number;
   coins: number;
   streakDays: number;
