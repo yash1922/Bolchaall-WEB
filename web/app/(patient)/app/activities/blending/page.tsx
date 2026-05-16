@@ -260,22 +260,15 @@ export default function PhonemeBlendingGame() {
           subtitle="Tap the play button to hear the chunks one by one. Pick the word they spell."
           action={<Badge variant="primary">Round {idx + 1}</Badge>}
         />
-        <div className="flex flex-col items-center gap-4 py-2">
+        <div className="flex flex-col items-center gap-3 py-3">
           <Button onClick={playChunks} variant="primary" size="lg">
             <Volume2 className="w-5 h-5" />
             Play sounds
           </Button>
-          <div className="flex gap-1.5 flex-wrap justify-center text-ink-500 dark:text-ink-400 text-sm">
-            {round?.chunks.map((c, i) => (
-              <span
-                key={i}
-                className="px-2 py-0.5 rounded bg-ink-100 dark:bg-ink-800 font-mono"
-                title="One sound chunk"
-              >
-                /{c.display}/
-              </span>
-            ))}
-          </div>
+          <p className="text-xs text-ink-500 dark:text-ink-400 text-center max-w-md">
+            Listen carefully — the word is spoken slowly first, then at normal speed.
+            Then pick the word you heard from the options below.
+          </p>
         </div>
       </Card>
 

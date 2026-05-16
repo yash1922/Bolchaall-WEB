@@ -451,6 +451,95 @@ patientRouter.post(
   })
 );
 
+/**
+ * GET /api/patient/available-therapists
+ * Returns the list of approved therapists the patient can choose from, with
+ * specialization, roster size, and rating so they can make an informed pick.
+ */
+patientRouter.get(
+  "/available-therapists",
+  asyncHandler(async (req, res) => {
+    const userId = req.auth!.sub;
+    const profiles = await DoctorProfile.find({ status: "approved" })
+      .populate("userId", "name email")
+      .lean();
+    const counts = await Promise.all(
+      profiles.map(async (d) => ({
+        userId: String(d.userId),
+        count: await Patient.countDocuments({ assignedDoctorId: d.userId }),
+      }))
+    );
+    const countMap = new Map(counts.map((c) => [c.userId, c.count]));
+
+    const patient = await Patient.findOne({ userId }).select("assignedDoctorId").lean();
+    const currentDoctorId = patient?.assignedDoctorId ? String(patient.assignedDoctorId) : null;
+
+    res.json({
+      ok: true,
+      data: profiles.map((d) => {
+        const u = d.userId as unknown as { _id: Types.ObjectId; name: string; email: string };
+        const uid = String(u._id);
+        return {
+          userId: uid,
+          name: u.name,
+          email: u.email,
+          specialization: d.specialization ?? "",
+          qualification: d.qualification ?? "",
+          experienceYears: d.experienceYears ?? 0,
+          rating: d.rating ?? null,
+          rosterCount: countMap.get(uid) ?? 0,
+          isCurrent: uid === currentDoctorId,
+        };
+      }),
+    });
+  })
+);
+
+/**
+ * POST /api/patient/therapist/select
+ * body: { doctorUserId: string }
+ * Switch the assigned therapist to the chosen approved doctor.
+ * Lazy-creates the new chat row so the conversation thread is immediately ready.
+ */
+patientRouter.post(
+  "/therapist/select",
+  asyncHandler(async (req, res) => {
+    const userId = req.auth!.sub;
+    const doctorUserId = String(req.body?.doctorUserId ?? "");
+    if (!Types.ObjectId.isValid(doctorUserId)) {
+      throw Errors.badRequest("Invalid doctorUserId");
+    }
+    const doctor = await DoctorProfile.findOne({ userId: doctorUserId, status: "approved" });
+    if (!doctor) throw Errors.badRequest("Therapist must be an approved provider");
+
+    const patient = await Patient.findOneAndUpdate(
+      { userId },
+      { $set: { assignedDoctorId: doctorUserId } },
+      { new: true }
+    );
+    if (!patient) throw Errors.notFound("Patient not found");
+
+    // Lazy-create the chat row for the new pair so it shows up in inboxes.
+    // The unique compound index on (patientId, doctorId) prevents duplicates.
+    const { Chat } = await import("../models/Chat");
+    try {
+      await Chat.create({ patientId: userId, doctorId: doctorUserId });
+    } catch (e) {
+      if ((e as { code?: number }).code !== 11000) throw e;
+    }
+
+    const newDoctor = await User.findById(doctorUserId).select("name email").lean();
+    res.json({
+      ok: true,
+      data: {
+        doctor: newDoctor
+          ? { id: String(newDoctor._id), name: newDoctor.name, email: newDoctor.email }
+          : null,
+      },
+    });
+  })
+);
+
 patientRouter.post(
   "/upgrade-demo",
   asyncHandler(async (req, res) => {

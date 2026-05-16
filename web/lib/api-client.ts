@@ -178,6 +178,25 @@ export const api = {
       subscriptionStatus: import("shared").SubscriptionStatus;
       trialEndsAt: string | null;
     }>("/api/patient/upgrade-demo", { method: "POST" }),
+  patientAvailableTherapists: () =>
+    request<
+      Array<{
+        userId: string;
+        name: string;
+        email: string;
+        specialization: string;
+        qualification: string;
+        experienceYears: number;
+        rating: number | null;
+        rosterCount: number;
+        isCurrent: boolean;
+      }>
+    >("/api/patient/available-therapists"),
+  patientSelectTherapist: (doctorUserId: string) =>
+    request<{ doctor: { id: string; name: string; email: string } | null }>(
+      "/api/patient/therapist/select",
+      { method: "POST", body: { doctorUserId } }
+    ),
   patientAutoMatch: () =>
     request<{ doctor: { id: string; name: string; email: string } | null }>(
       "/api/patient/auto-match",

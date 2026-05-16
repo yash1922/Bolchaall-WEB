@@ -27,6 +27,7 @@ import { api } from "@/lib/api-client";
 import { formatRelative } from "@/lib/utils";
 
 type Detail = Awaited<ReturnType<typeof api.adminUserDetail>>;
+type Doctor = Awaited<ReturnType<typeof api.adminAssignments>>["doctors"][number];
 
 export default function AdminUserDetailPage() {
   const params = useParams<{ id: string }>();
@@ -36,6 +37,10 @@ export default function AdminUserDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Doctor list + pending selection for the assign-therapist control (patient view only)
+  const [doctors, setDoctors] = useState<Doctor[] | null>(null);
+  const [pendingDoctorId, setPendingDoctorId] = useState<string>("");
+  const [assigning, setAssigning] = useState(false);
 
   async function load() {
     try {
@@ -49,6 +54,44 @@ export default function AdminUserDetailPage() {
   useEffect(() => {
     load();
   }, [params.id]);
+
+  // Lazy-load the approved-doctor list only when viewing a patient — that's
+  // the only role where the assign-therapist control is shown.
+  useEffect(() => {
+    if (data?.role === "patient" && doctors === null) {
+      api.adminAssignments()
+        .then((d) => {
+          setDoctors(d.doctors);
+          setPendingDoctorId(data.patient?.assignedDoctorId ?? "");
+        })
+        .catch(() => {
+          /* leave doctors null — UI shows empty fallback */
+        });
+    }
+  }, [data, doctors]);
+
+  async function saveAssignment() {
+    if (!data) return;
+    setAssigning(true);
+    try {
+      const next = pendingDoctorId === "" ? null : pendingDoctorId;
+      await api.adminAssignPatient(data.id, next);
+      toast({
+        title: next ? "Therapist assigned" : "Therapist removed",
+        variant: "success",
+      });
+      // Refresh detail so the patient.assignedDoctorId reflects the new value
+      await load();
+    } catch (e) {
+      toast({
+        title: "Could not update assignment",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "error",
+      });
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   async function toggleSuspend() {
     if (!data) return;
@@ -238,6 +281,49 @@ export default function AdminUserDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Assign / change therapist control (patient role only) */}
+          <div className="mt-4 pt-4 border-t border-ink-200 dark:border-ink-700">
+            <p className="text-xs uppercase tracking-wider text-ink-500 dark:text-ink-400 font-semibold mb-2 flex items-center gap-1">
+              <Stethoscope className="w-3.5 h-3.5" />
+              Assigned therapist
+            </p>
+            {doctors === null ? (
+              <p className="text-sm text-ink-500 dark:text-ink-400">Loading therapists…</p>
+            ) : doctors.length === 0 ? (
+              <p className="text-sm text-ink-500 dark:text-ink-400">
+                No approved therapists available. Approve a doctor in Applications first.
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={pendingDoctorId}
+                  onChange={(e) => setPendingDoctorId(e.target.value)}
+                  className="rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-3 py-2 text-sm text-ink-900 dark:text-ink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 flex-1 min-w-[240px]"
+                  disabled={assigning}
+                >
+                  <option value="">— Unassigned —</option>
+                  {doctors.map((d) => (
+                    <option key={d.userId} value={d.userId}>
+                      {d.name}
+                      {d.specialization ? ` · ${d.specialization}` : ""} · {d.rosterCount}{" "}
+                      patient{d.rosterCount === 1 ? "" : "s"}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={saveAssignment}
+                  disabled={
+                    assigning || pendingDoctorId === (data.patient?.assignedDoctorId ?? "")
+                  }
+                  loading={assigning}
+                >
+                  Save assignment
+                </Button>
+              </div>
+            )}
+          </div>
         </Card>
       )}
 

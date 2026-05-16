@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Users, Flame, Phone, Calendar } from "lucide-react";
+import { Users, Flame, Phone, Calendar, ArrowUpDown } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -19,6 +19,32 @@ export default function DoctorPatientsPage() {
   const [patients, setPatients] = useState<Patient[] | null>(null);
   const [available, setAvailable] = useState<Available[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Sort key for the roster. Newest is default (matches API order).
+  const [sortBy, setSortBy] = useState<"recent" | "age_asc" | "age_desc" | "streak_desc" | "name_asc">(
+    "recent"
+  );
+
+  // Apply the chosen sort. Patients without a known age sink to the end on age sorts.
+  const sortedPatients = useMemo(() => {
+    if (!patients) return null;
+    const arr = patients.slice();
+    if (sortBy === "age_asc" || sortBy === "age_desc") {
+      arr.sort((a, b) => {
+        const av = a.age;
+        const bv = b.age;
+        // Push unknowns (null) to the end regardless of direction
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        return sortBy === "age_asc" ? av - bv : bv - av;
+      });
+    } else if (sortBy === "streak_desc") {
+      arr.sort((a, b) => b.streakDays - a.streakDays);
+    } else if (sortBy === "name_asc") {
+      arr.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return arr;
+  }, [patients, sortBy]);
 
   async function load() {
     try {
@@ -67,14 +93,35 @@ export default function DoctorPatientsPage() {
       </div>
 
       <Card>
-        <CardHeader title="Your patients" />
+        <CardHeader
+          title="Your patients"
+          action={
+            patients.length > 0 ? (
+              <label className="inline-flex items-center gap-2 text-xs text-ink-600 dark:text-ink-400">
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-2 py-1 text-xs text-ink-800 dark:text-ink-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                >
+                  <option value="recent">Recently added</option>
+                  <option value="age_asc">Age (youngest first)</option>
+                  <option value="age_desc">Age (oldest first)</option>
+                  <option value="streak_desc">Longest streak</option>
+                  <option value="name_asc">Name (A → Z)</option>
+                </select>
+              </label>
+            ) : undefined
+          }
+        />
         {patients.length === 0 ? (
           <p className="text-sm text-ink-500 py-6 text-center">
             No patients yet. Claim one from the available list below.
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {patients.map((p, i) => (
+            {(sortedPatients ?? patients).map((p, i) => (
               <motion.div
                 key={p.id}
                 initial={{ opacity: 0, y: 8 }}
