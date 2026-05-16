@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Home, ShieldCheck, Users, Sparkles, LogOut, UserCog, MessageSquare } from "lucide-react";
+import { Home, ShieldCheck, Users, Sparkles, LogOut, UserCog, MessageSquare, ClipboardList } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
 import { api, setAccessToken } from "@/lib/api-client";
 import { PageTransition } from "@/components/providers/PageTransition";
@@ -13,7 +13,10 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/admin", label: "Overview", icon: Home },
   { href: "/admin/applications", label: "Applications", icon: ShieldCheck },
-  { href: "/admin/assignments", label: "Assignments", icon: UserCog },
+  // Pairings = patient ↔ therapist relationships
+  { href: "/admin/pairings", label: "Pairings", icon: UserCog },
+  // Assignments = exercise homework therapists send to patients
+  { href: "/admin/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/admin/chats", label: "Chat monitor", icon: MessageSquare },
   { href: "/admin/users", label: "Users", icon: Users },
 ];

@@ -1,61 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { UserCog, Stethoscope } from "lucide-react";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
+import { ClipboardList, CheckCircle2, Clock, AlertTriangle, Sparkles } from "lucide-react";
+import { Card, CardHeader, StatCard } from "@/components/ui/Card";
+import { Badge, DifficultyBadge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
-import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api-client";
+import { formatRelative, cn } from "@/lib/utils";
 
-type Data = Awaited<ReturnType<typeof api.adminAssignments>>;
+type Homework = Awaited<ReturnType<typeof api.adminHomework>>[number];
+type Filter = "all" | "pending" | "completed" | "reviewed" | "overdue";
 
-export default function AdminAssignmentsPage() {
-  const { toast } = useToast();
-  const [data, setData] = useState<Data | null>(null);
+/**
+ * Homework assignments — exercises a therapist assigned to one of their patients.
+ * NOT to be confused with the patient ↔ therapist pairings page at /admin/pairings.
+ */
+export default function AdminHomeworkPage() {
+  const [list, setList] = useState<Homework[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-
-  async function load() {
-    try {
-      const d = await api.adminAssignments();
-      setData(d);
-      setPending({});
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    }
-  }
+  const [filter, setFilter] = useState<Filter>("all");
 
   useEffect(() => {
-    load();
+    api.adminHomework()
+      .then(setList)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed"));
   }, []);
 
-  const doctorById = useMemo(() => {
-    const m = new Map<string, Data["doctors"][number]>();
-    data?.doctors.forEach((d) => m.set(d.userId, d));
-    return m;
-  }, [data]);
-
-  async function save(patientUserId: string) {
-    const newDoctorId = pending[patientUserId];
-    if (newDoctorId === undefined) return;
-    setBusy(patientUserId);
-    try {
-      await api.adminAssignPatient(patientUserId, newDoctorId === "" ? null : newDoctorId);
-      toast({ title: "Assignment updated", variant: "success" });
-      await load();
-    } catch (e) {
-      toast({
-        title: "Could not update",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "error",
-      });
-    } finally {
-      setBusy(null);
+  const stats = useMemo(() => {
+    const s = { total: 0, pending: 0, completed: 0, reviewed: 0, overdue: 0 };
+    for (const a of list ?? []) {
+      s.total += 1;
+      s[a.status] += 1;
     }
-  }
+    return s;
+  }, [list]);
+
+  const filtered = useMemo(() => {
+    if (!list) return [];
+    if (filter === "all") return list;
+    return list.filter((a) => a.status === filter);
+  }, [list, filter]);
 
   if (error)
     return (
@@ -63,7 +48,7 @@ export default function AdminAssignmentsPage() {
         <p className="text-rose-600">{error}</p>
       </Card>
     );
-  if (!data)
+  if (!list)
     return (
       <div className="flex items-center justify-center py-24">
         <Spinner size={28} />
@@ -73,104 +58,179 @@ export default function AdminAssignmentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-3xl mb-1 text-ink-900 dark:text-ink-100">Patient assignments</h1>
+        <h1 className="font-display text-3xl mb-1 text-ink-900 dark:text-ink-100">
+          Homework assignments
+        </h1>
         <p className="text-sm text-ink-600 dark:text-ink-400">
-          {data.patients.length} patients · {data.doctors.length} approved therapists
+          Every exercise a therapist has assigned to a patient. To change which therapist a
+          patient is paired with, go to{" "}
+          <Link
+            href="/admin/pairings"
+            className="text-brand-700 dark:text-brand-300 underline"
+          >
+            Pairings
+          </Link>
+          .
         </p>
       </div>
 
-      <Card>
-        <CardHeader title="Therapist load" subtitle="Approved therapists and their current roster size." />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {data.doctors.map((d) => (
-            <div
-              key={d.userId}
-              className="rounded-xl border border-ink-200 dark:border-ink-700 p-3 bg-white dark:bg-ink-900"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-lg bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 flex items-center justify-center">
-                  <Stethoscope className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink-900 dark:text-ink-100 truncate">
-                    {d.name}
-                  </p>
-                  <p className="text-xs text-ink-500 truncate">{d.specialization || "—"}</p>
-                </div>
-                <Badge variant="primary">{d.rosterCount}</Badge>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {/* Status stat tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard
+          label="Pending"
+          value={stats.pending}
+          hint="Not yet started"
+          icon={<Clock className="w-5 h-5" />}
+        />
+        <StatCard
+          label="Completed"
+          value={stats.completed}
+          hint="Awaiting review"
+          icon={<ClipboardList className="w-5 h-5" />}
+          trend="up"
+        />
+        <StatCard
+          label="Reviewed"
+          value={stats.reviewed}
+          hint="Therapist gave feedback"
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          trend="up"
+        />
+        <StatCard
+          label="Overdue"
+          value={stats.overdue}
+          hint="Past due, not done"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          trend={stats.overdue > 0 ? "down" : "flat"}
+        />
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {(["all", "pending", "completed", "reviewed", "overdue"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs uppercase tracking-wider font-semibold border transition",
+              filter === f
+                ? "bg-brand-100 dark:bg-brand-900 border-brand-300 dark:border-brand-700 text-brand-800 dark:text-brand-200"
+                : "bg-white dark:bg-ink-900 border-ink-200 dark:border-ink-700 text-ink-600 dark:text-ink-400 hover:border-brand-300"
+            )}
+          >
+            {f}
+            <span className="text-[10px] font-mono opacity-70">
+              {f === "all" ? stats.total : stats[f]}
+            </span>
+          </button>
+        ))}
+      </div>
 
       <Card className="p-0 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-ink-100 dark:bg-ink-800">
-            <tr>
-              <th className="text-left py-2.5 px-4 text-xs uppercase tracking-wider text-ink-600 dark:text-ink-400">Patient</th>
-              <th className="text-left py-2.5 px-4 text-xs uppercase tracking-wider text-ink-600 dark:text-ink-400">Subscription</th>
-              <th className="text-left py-2.5 px-4 text-xs uppercase tracking-wider text-ink-600 dark:text-ink-400">Currently assigned</th>
-              <th className="text-left py-2.5 px-4 text-xs uppercase tracking-wider text-ink-600 dark:text-ink-400">Reassign to</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {data.patients.map((p) => {
-              const current = p.assignedDoctorId ? doctorById.get(p.assignedDoctorId) : null;
-              const selected = pending[p.userId] ?? p.assignedDoctorId ?? "";
-              return (
-                <tr key={p.userId} className="border-t border-ink-200 dark:border-ink-700">
-                  <td className="py-3 px-4">
-                    <p className="text-ink-900 dark:text-ink-100">{p.name}</p>
-                    <p className="text-xs text-ink-500">{p.email}</p>
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge variant={p.subscriptionStatus === "active" ? "success" : "trial"}>
-                      {p.subscriptionStatus}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4">
-                    {current ? (
-                      <span className="text-ink-900 dark:text-ink-100">{current.name}</span>
-                    ) : (
-                      <span className="text-ink-500 italic">unassigned</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <select
-                      value={selected}
-                      onChange={(e) =>
-                        setPending((prev) => ({ ...prev, [p.userId]: e.target.value }))
-                      }
-                      className="h-9 rounded-lg bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-700 px-2 text-sm text-ink-900 dark:text-ink-100"
-                    >
-                      <option value="">— Unassign —</option>
-                      {data.doctors.map((d) => (
-                        <option key={d.userId} value={d.userId}>
-                          {d.name} ({d.rosterCount})
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    {pending[p.userId] !== undefined && pending[p.userId] !== (p.assignedDoctorId ?? "") && (
-                      <Button
-                        size="sm"
-                        loading={busy === p.userId}
-                        onClick={() => save(p.userId)}
-                      >
-                        <UserCog className="w-3.5 h-3.5" />
-                        Save
-                      </Button>
-                    )}
-                  </td>
+        {filtered.length === 0 ? (
+          <p className="text-sm text-ink-500 dark:text-ink-400 py-12 text-center">
+            <Sparkles className="w-5 h-5 mx-auto mb-2 text-ink-400" />
+            No assignments {filter !== "all" && `in "${filter}"`} yet.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-ink-50 dark:bg-ink-900/40">
+                <tr>
+                  <Th>Exercise</Th>
+                  <Th>Patient</Th>
+                  <Th>Therapist</Th>
+                  <Th>Created</Th>
+                  <Th>Due</Th>
+                  <Th>Status</Th>
+                  <Th>Score</Th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {filtered.map((a) => (
+                  <tr
+                    key={a.id}
+                    className="border-t border-ink-200 dark:border-ink-700 hover:bg-brand-50/40 dark:hover:bg-ink-800/40 transition"
+                  >
+                    <td className="py-3 px-4">
+                      <p className="font-medium text-ink-900 dark:text-ink-100">
+                        {a.exerciseTitle}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        {a.exerciseDifficulty && (
+                          <DifficultyBadge
+                            level={a.exerciseDifficulty as "easy" | "medium" | "hard"}
+                          />
+                        )}
+                        {a.exerciseType && (
+                          <Badge variant="muted">{a.exerciseType}</Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link
+                        href={`/admin/users/${a.patientId}`}
+                        className="text-ink-900 dark:text-ink-100 hover:text-brand-700 dark:hover:text-brand-300 hover:underline"
+                      >
+                        {a.patientName}
+                      </Link>
+                      <p className="text-[11px] text-ink-500 truncate max-w-[200px]">
+                        {a.patientEmail}
+                      </p>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link
+                        href={`/admin/users/${a.doctorId}`}
+                        className="text-ink-700 dark:text-ink-300 hover:text-brand-700 dark:hover:text-brand-300 hover:underline"
+                      >
+                        {a.doctorName}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 text-xs text-ink-500 dark:text-ink-400">
+                      {formatRelative(a.createdAt)}
+                    </td>
+                    <td className="py-3 px-4 text-xs text-ink-500 dark:text-ink-400">
+                      {a.dueAt ? formatRelative(a.dueAt) : "—"}
+                    </td>
+                    <td className="py-3 px-4">
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td className="py-3 px-4 text-ink-700 dark:text-ink-300">
+                      {a.therapistManualScore !== null ? (
+                        <span className="inline-flex items-center gap-1 font-mono">
+                          {a.therapistManualScore}/100
+                        </span>
+                      ) : (
+                        <span className="text-ink-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );
+}
+
+function Th({ children }: { children?: React.ReactNode }) {
+  return (
+    <th className="text-left py-3 px-4 text-xs uppercase tracking-wider text-ink-600 dark:text-ink-400 font-semibold whitespace-nowrap">
+      {children}
+    </th>
+  );
+}
+
+function StatusBadge({ status }: { status: Homework["status"] }) {
+  const variant =
+    status === "reviewed"
+      ? "success"
+      : status === "completed"
+      ? "warning"
+      : status === "overdue"
+      ? "danger"
+      : "muted";
+  return <Badge variant={variant}>{status}</Badge>;
 }

@@ -493,6 +493,27 @@ export const api = {
     request<{ deleted: true; role: string; name: string }>(`/api/admin/users/${id}`, {
       method: "DELETE",
     }),
+  adminHomework: () =>
+    request<
+      Array<{
+        id: string;
+        patientId: string;
+        patientName: string;
+        patientEmail: string;
+        doctorId: string;
+        doctorName: string;
+        exerciseId: string;
+        exerciseTitle: string;
+        exerciseType: string | null;
+        exerciseDifficulty: string | null;
+        createdAt: string;
+        dueAt: string | null;
+        completedAt: string | null;
+        reviewedAt: string | null;
+        therapistManualScore: number | null;
+        status: "pending" | "completed" | "reviewed" | "overdue";
+      }>
+    >("/api/admin/homework"),
   adminAssignments: () =>
     request<{
       patients: Array<{

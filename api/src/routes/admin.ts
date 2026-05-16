@@ -316,7 +316,75 @@ adminRouter.delete(
   })
 );
 
-// ---- Admin: patient ↔ therapist assignment ----
+// ---- Admin: homework (exercise assignments authored by therapists) ----
+
+adminRouter.get(
+  "/homework",
+  asyncHandler(async (_req, res) => {
+    // Fetch all assignments, newest first, with the linked exercise and
+    // both endpoints (patient + doctor) resolved in one round-trip.
+    const list = await Assignment.find()
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    const userIds = new Set<string>();
+    const exerciseIds = new Set<string>();
+    for (const a of list) {
+      userIds.add(String(a.patientId));
+      userIds.add(String(a.doctorId));
+      exerciseIds.add(String(a.exerciseId));
+    }
+    const [users, exercises] = await Promise.all([
+      User.find({ _id: { $in: Array.from(userIds) } }).select("name email role").lean(),
+      // Lazy-import Exercise to avoid touching the model graph at module load
+      (await import("../models/Exercise")).Exercise.find({
+        _id: { $in: Array.from(exerciseIds) },
+      })
+        .select("title type difficulty")
+        .lean(),
+    ]);
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+    const exMap = new Map(exercises.map((e) => [String(e._id), e]));
+
+    res.json({
+      ok: true,
+      data: list.map((a) => {
+        const patient = userMap.get(String(a.patientId));
+        const doctor = userMap.get(String(a.doctorId));
+        const ex = exMap.get(String(a.exerciseId));
+        // Reviewed > Completed > Overdue > Pending
+        let status: "pending" | "completed" | "reviewed" | "overdue" = "pending";
+        if (a.reviewedAt) status = "reviewed";
+        else if (a.completedAt) status = "completed";
+        else if (a.dueAt && a.dueAt.getTime() < Date.now()) status = "overdue";
+        return {
+          id: String(a._id),
+          patientId: String(a.patientId),
+          patientName: patient?.name ?? "Unknown",
+          patientEmail: patient?.email ?? "",
+          doctorId: String(a.doctorId),
+          doctorName: doctor?.name ?? "Unknown",
+          exerciseId: String(a.exerciseId),
+          exerciseTitle: ex?.title ?? "(deleted exercise)",
+          exerciseType: ex?.type ?? null,
+          exerciseDifficulty: ex?.difficulty ?? null,
+          createdAt: a.createdAt.toISOString(),
+          dueAt: a.dueAt?.toISOString() ?? null,
+          completedAt: a.completedAt?.toISOString() ?? null,
+          reviewedAt: a.reviewedAt?.toISOString() ?? null,
+          therapistManualScore:
+            typeof (a as { therapistManualScore?: number | null }).therapistManualScore === "number"
+              ? (a as { therapistManualScore: number }).therapistManualScore
+              : null,
+          status,
+        };
+      }),
+    });
+  })
+);
+
+// ---- Admin: patient ↔ therapist pairing ----
 
 adminRouter.get(
   "/assignments",
