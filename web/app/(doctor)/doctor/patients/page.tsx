@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Users, Flame } from "lucide-react";
+import { Users, Flame, Phone, Calendar } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -84,17 +84,33 @@ export default function DoctorPatientsPage() {
                 <Link href={`/doctor/patients/${p.userId}`}>
                   <Card className="hover:border-brand-200 hover:bg-brand-500/5 transition cursor-pointer">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-display text-lg">{p.name}</p>
-                        <p className="text-xs text-ink-500">{p.email}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display text-lg text-ink-900 dark:text-ink-100 truncate">
+                          {p.name}
+                        </p>
+                        <p className="text-xs text-ink-500 dark:text-ink-400 truncate">{p.email}</p>
                       </div>
-                      <Badge variant={p.subscriptionStatus === "active" ? "success" : "trial"}>
+                      <Badge variant={p.subscriptionStatus === "active" ? "success" : "warning"}>
                         {p.subscriptionStatus}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-3 mt-3 text-xs text-ink-600">
+                    {/* Basic personal details — age + phone, surfaced so the therapist
+                        has context without opening the detail page. */}
+                    <div className="flex items-center gap-3 mt-2 text-xs text-ink-600 dark:text-ink-400 flex-wrap">
                       <span className="inline-flex items-center gap-1">
-                        <Flame className="w-3.5 h-3.5 text-orange-400" />
+                        <Calendar className="w-3.5 h-3.5" />
+                        {p.age !== null && p.age !== undefined ? `${p.age} yrs` : "age —"}
+                      </span>
+                      {p.phone && (
+                        <span className="inline-flex items-center gap-1 truncate">
+                          <Phone className="w-3.5 h-3.5" />
+                          {p.phone}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-ink-600 dark:text-ink-400">
+                      <span className="inline-flex items-center gap-1">
+                        <Flame className="w-3.5 h-3.5 text-coral-500" />
                         {p.streakDays}d
                       </span>
                       <span>{p.xp} XP</span>

@@ -147,6 +147,8 @@ doctorRouter.get(
           userId: String(u._id),
           name: u.name,
           email: u.email,
+          age: typeof (p as { age?: number | null }).age === "number" ? (p as { age: number }).age : null,
+          phone: typeof (p as { phone?: string }).phone === "string" ? (p as { phone: string }).phone : "",
           xp: p.xp,
           coins: p.coins,
           streakDays: p.streakDays,
@@ -186,6 +188,14 @@ doctorRouter.get(
           userId: String(u._id),
           name: u.name,
           email: u.email,
+          age:
+            typeof (patient as { age?: number | null }).age === "number"
+              ? (patient as { age: number }).age
+              : null,
+          phone:
+            typeof (patient as { phone?: string }).phone === "string"
+              ? (patient as { phone: string }).phone
+              : "",
           xp: patient.xp,
           coins: patient.coins,
           streakDays: patient.streakDays,

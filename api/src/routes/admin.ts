@@ -8,6 +8,10 @@ import { DoctorProfile } from "../models/DoctorProfile";
 import { Patient } from "../models/Patient";
 import { Chat } from "../models/Chat";
 import { Message } from "../models/Message";
+import { Score } from "../models/Score";
+import { Assignment } from "../models/Assignment";
+import { TherapistRating } from "../models/TherapistRating";
+import { RefreshToken } from "../models/RefreshToken";
 import { Emails } from "../services/email";
 
 export const adminRouter = Router();
@@ -117,17 +121,123 @@ adminRouter.post(
 adminRouter.get(
   "/users",
   asyncHandler(async (_req, res) => {
-    const list = await User.find().sort({ createdAt: -1 }).limit(200).lean();
+    const list = await User.find().sort({ createdAt: -1 }).limit(500).lean();
+    // Bulk-load role-specific extras so the admin list can render per-row context
+    // without an N+1 query (patient age/streak, doctor specialization/status).
+    const userIds = list.map((u) => u._id);
+    const [patients, doctors] = await Promise.all([
+      Patient.find({ userId: { $in: userIds } })
+        .select("userId age phone streakDays xp subscriptionStatus")
+        .lean(),
+      DoctorProfile.find({ userId: { $in: userIds } })
+        .select("userId specialization status rating")
+        .lean(),
+    ]);
+    const patientMap = new Map(patients.map((p) => [String(p.userId), p]));
+    const doctorMap = new Map(doctors.map((d) => [String(d.userId), d]));
+
     res.json({
       ok: true,
-      data: list.map((u) => ({
-        id: String(u._id),
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        suspended: u.suspended,
-        createdAt: u.createdAt.toISOString(),
-      })),
+      data: list.map((u) => {
+        const uid = String(u._id);
+        const p = patientMap.get(uid);
+        const d = doctorMap.get(uid);
+        return {
+          id: uid,
+          email: u.email,
+          name: u.name,
+          role: u.role,
+          suspended: u.suspended,
+          createdAt: u.createdAt.toISOString(),
+          // Patient-only:
+          age: p ? (typeof p.age === "number" ? p.age : null) : null,
+          phone: p ? (p.phone ?? "") : "",
+          streakDays: p ? p.streakDays : null,
+          xp: p ? p.xp : null,
+          subscriptionStatus: p ? p.subscriptionStatus : null,
+          // Doctor-only:
+          specialization: d ? (d.specialization ?? "") : "",
+          doctorStatus: d ? d.status : null,
+          rating: d ? (d.rating ?? null) : null,
+        };
+      }),
+    });
+  })
+);
+
+adminRouter.get(
+  "/users/:id",
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id).lean();
+    if (!user) throw Errors.notFound("User not found");
+    const uid = user._id;
+
+    // Pull role-specific profile + a handful of activity stats so the detail
+    // page can render everything from one round-trip.
+    const [patient, doctor, scoreCount, assignmentCount, chatCount] = await Promise.all([
+      user.role === "patient" ? Patient.findOne({ userId: uid }).lean() : null,
+      user.role === "doctor" ? DoctorProfile.findOne({ userId: uid }).lean() : null,
+      Score.countDocuments(
+        user.role === "patient" ? { patientId: uid } : {}
+      ),
+      Assignment.countDocuments(
+        user.role === "patient" ? { patientId: uid } : { doctorId: uid }
+      ),
+      Chat.countDocuments(
+        user.role === "patient" ? { patientId: uid } : { doctorId: uid }
+      ),
+    ]);
+
+    res.json({
+      ok: true,
+      data: {
+        id: String(uid),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        suspended: user.suspended,
+        createdAt: user.createdAt.toISOString(),
+        patient: patient
+          ? {
+              age: typeof (patient as { age?: number | null }).age === "number" ? (patient as { age: number }).age : null,
+              phone: typeof (patient as { phone?: string }).phone === "string" ? (patient as { phone: string }).phone : "",
+              language: patient.language,
+              conditions: patient.conditions,
+              xp: patient.xp,
+              coins: patient.coins,
+              streakDays: patient.streakDays,
+              unlockedBadges: patient.unlockedBadges,
+              subscriptionStatus: patient.subscriptionStatus,
+              trialEndsAt: patient.trialEndsAt?.toISOString() ?? null,
+              assignedDoctorId: patient.assignedDoctorId ? String(patient.assignedDoctorId) : null,
+              lastPracticedAt: patient.lastPracticedAt?.toISOString() ?? null,
+              onboardingComplete: patient.onboardingComplete,
+            }
+          : null,
+        doctor: doctor
+          ? {
+              fullName: doctor.fullName ?? user.name,
+              phone: doctor.phone ?? "",
+              specialization: doctor.specialization ?? "",
+              qualification: doctor.qualification ?? "",
+              license: doctor.license,
+              experienceYears: doctor.experienceYears,
+              bio: doctor.bio,
+              status: doctor.status,
+              rating: doctor.rating ?? null,
+              clinicName: doctor.clinicName ?? "",
+              linkedinUrl: doctor.linkedinUrl ?? "",
+              submittedAt: doctor.submittedAt?.toISOString() ?? null,
+              approvedAt: doctor.approvedAt?.toISOString() ?? null,
+              rejectedAt: doctor.rejectedAt?.toISOString() ?? null,
+            }
+          : null,
+        activity: {
+          scoreCount,
+          assignmentCount,
+          chatCount,
+        },
+      },
     });
   })
 );
@@ -143,6 +253,66 @@ adminRouter.post(
     );
     if (!updated) throw Errors.notFound("User not found");
     res.json({ ok: true, data: { suspended: updated.suspended } });
+  })
+);
+
+/**
+ * DELETE /api/admin/users/:id
+ * Cascading hard-delete of a user and all linked records.
+ * Refuses to delete admin accounts (use suspend instead).
+ */
+adminRouter.delete(
+  "/users/:id",
+  asyncHandler(async (req, res) => {
+    const target = await User.findById(req.params.id).lean();
+    if (!target) throw Errors.notFound("User not found");
+    if (target.role === "admin") {
+      throw Errors.forbidden("Cannot delete admin accounts — suspend instead.");
+    }
+    // Don't allow self-delete (would lock out the dashboard)
+    if (String(target._id) === req.auth!.sub) {
+      throw Errors.forbidden("Cannot delete your own account.");
+    }
+    const uid = target._id;
+
+    if (target.role === "patient") {
+      // Wipe all chats this patient was in (and their messages)
+      const chats = await Chat.find({ patientId: uid }).select("_id").lean();
+      const chatIds = chats.map((c) => c._id);
+      await Promise.all([
+        Patient.deleteOne({ userId: uid }),
+        Score.deleteMany({ patientId: uid }),
+        Assignment.deleteMany({ patientId: uid }),
+        TherapistRating.deleteMany({ patientId: uid }),
+        Message.deleteMany({ chatId: { $in: chatIds } }),
+        Chat.deleteMany({ patientId: uid }),
+      ]);
+    } else if (target.role === "doctor") {
+      // Unassign patients pointing at this doctor + nuke their chats/assignments
+      const chats = await Chat.find({ doctorId: uid }).select("_id").lean();
+      const chatIds = chats.map((c) => c._id);
+      await Promise.all([
+        DoctorProfile.deleteOne({ userId: uid }),
+        Assignment.deleteMany({ doctorId: uid }),
+        TherapistRating.deleteMany({ doctorId: uid }),
+        Message.deleteMany({ chatId: { $in: chatIds } }),
+        Chat.deleteMany({ doctorId: uid }),
+        Patient.updateMany(
+          { assignedDoctorId: uid },
+          { $set: { assignedDoctorId: null } }
+        ),
+      ]);
+    }
+
+    await Promise.all([
+      RefreshToken.deleteMany({ userId: uid }),
+      User.deleteOne({ _id: uid }),
+    ]);
+
+    res.json({
+      ok: true,
+      data: { deleted: true, role: target.role, name: target.name },
+    });
   })
 );
 

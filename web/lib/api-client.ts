@@ -241,6 +241,8 @@ export const api = {
         userId: string;
         name: string;
         email: string;
+        age: number | null;
+        phone: string;
         xp: number;
         coins: number;
         streakDays: number;
@@ -255,6 +257,8 @@ export const api = {
         userId: string;
         name: string;
         email: string;
+        age: number | null;
+        phone: string;
         xp: number;
         coins: number;
         streakDays: number;
@@ -408,12 +412,67 @@ export const api = {
         role: string;
         suspended: boolean;
         createdAt: string;
+        // Patient-only
+        age: number | null;
+        phone: string;
+        streakDays: number | null;
+        xp: number | null;
+        subscriptionStatus: string | null;
+        // Doctor-only
+        specialization: string;
+        doctorStatus: string | null;
+        rating: number | null;
       }>
     >("/api/admin/users"),
+  adminUserDetail: (id: string) =>
+    request<{
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      suspended: boolean;
+      createdAt: string;
+      patient: null | {
+        age: number | null;
+        phone: string;
+        language: string;
+        conditions: string[];
+        xp: number;
+        coins: number;
+        streakDays: number;
+        unlockedBadges: string[];
+        subscriptionStatus: string;
+        trialEndsAt: string | null;
+        assignedDoctorId: string | null;
+        lastPracticedAt: string | null;
+        onboardingComplete: boolean;
+      };
+      doctor: null | {
+        fullName: string;
+        phone: string;
+        specialization: string;
+        qualification: string;
+        license: string;
+        experienceYears: number;
+        bio: string;
+        status: string;
+        rating: number | null;
+        clinicName: string;
+        linkedinUrl: string;
+        submittedAt: string | null;
+        approvedAt: string | null;
+        rejectedAt: string | null;
+      };
+      activity: { scoreCount: number; assignmentCount: number; chatCount: number };
+    }>(`/api/admin/users/${id}`),
   adminSuspend: (id: string, suspend: boolean) =>
     request<{ suspended: boolean }>(`/api/admin/users/${id}/suspend`, {
       method: "POST",
       body: { suspend },
+    }),
+  adminDeleteUser: (id: string) =>
+    request<{ deleted: true; role: string; name: string }>(`/api/admin/users/${id}`, {
+      method: "DELETE",
     }),
   adminAssignments: () =>
     request<{

@@ -79,12 +79,33 @@ export default function PatientDetail() {
         Back to roster
       </Button>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl">{data.patient.name}</h1>
-          <p className="text-sm text-cosmic-300/70">{data.patient.email}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge variant={data.patient.subscriptionStatus === "active" ? "success" : "trial"}>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="font-display text-3xl text-ink-900 dark:text-ink-100">{data.patient.name}</h1>
+          <p className="text-sm text-ink-600 dark:text-ink-400">{data.patient.email}</p>
+          {/* Basic personal details: age + phone — surfaced so the therapist has
+              full context at a glance without digging into the admin view. */}
+          <div className="flex items-center gap-3 mt-2 text-sm text-ink-700 dark:text-ink-300 flex-wrap">
+            {data.patient.age !== null && data.patient.age !== undefined && (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-ink-500 font-semibold">Age</span>
+                <span className="font-medium">{data.patient.age} yrs</span>
+              </span>
+            )}
+            {data.patient.phone && (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-ink-500 font-semibold">Phone</span>
+                <a
+                  href={`tel:${data.patient.phone}`}
+                  className="font-medium text-brand-700 dark:text-brand-300 hover:underline"
+                >
+                  {data.patient.phone}
+                </a>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <Badge variant={data.patient.subscriptionStatus === "active" ? "success" : "warning"}>
               {data.patient.subscriptionStatus}
             </Badge>
             {data.patient.conditions.map((c) => (
